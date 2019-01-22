@@ -15,7 +15,7 @@ import 'demos.dart';
 const String _kGalleryAssetsPackage = 'flutter_gallery_assets';
 const Color _kFlutterBlue = Color(0xFF003D75);
 const double _kDemoItemHeight = 64.0;
-const Duration _kFrontLayerSwitchDuration = Duration(milliseconds: 300);
+const Duration _kFrontLayerSwitchDuration = Duration(milliseconds: 0);
 
 class _FlutterLogo extends StatelessWidget {
   const _FlutterLogo({ Key key }) : super(key: key);
@@ -168,6 +168,7 @@ class _DemoItem extends StatelessWidget {
   final GalleryDemo demo;
 
   void _launchDemo(BuildContext context) {
+
     if (demo.routeName != null) {
       Timeline.instantSync('Start Transition', arguments: <String, String>{
         'from': '/',

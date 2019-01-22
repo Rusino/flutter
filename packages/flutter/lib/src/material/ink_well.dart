@@ -438,8 +438,9 @@ class _InkResponseState<T extends InkResponse> extends State<T> with AutomaticKe
       _lastHighlight.deactivate();
     }
     assert(value == (_lastHighlight != null && _lastHighlight.active));
-    if (widget.onHighlightChanged != null)
+    if (widget.onHighlightChanged != null) {
       widget.onHighlightChanged(value);
+    }
   }
 
   void _handleInkHighlightRemoval() {

@@ -6,9 +6,11 @@
 // Like what you see? Tweet us @flutterio
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'gallery/app.dart';
 
 void main() {
+  //debugRepaintTextRainbowEnabled = true;
   runApp(const GalleryApp());
 }
