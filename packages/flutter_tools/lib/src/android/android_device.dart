@@ -277,7 +277,7 @@ class AndroidDevice extends Device {
     if (!await _checkForSupportedAdbVersion() || !await _checkForSupportedAndroidVersion())
       return false;
 
-    final Status status = logger.startProgress('Installing ${fs.path.relative(apk.file.path)}...', timeout: timeoutConfiguration.slowOperation);
+    final Status status = logger.startProgress('Installing ${fs.path.relative(apk.file.path)}...', timeout: kSlowOperation);
     final RunResult installResult = await runAsync(adbCommandForDevice(<String>['install', '-t', '-r', apk.file.path]));
     status.stop();
     // Some versions of adb exit with exit code 0 even on failure :(
@@ -427,6 +427,8 @@ class AndroidDevice extends Device {
       cmd.addAll(<String>['--ez', 'skia-deterministic-rendering', 'true']);
     if (debuggingOptions.traceSkia)
       cmd.addAll(<String>['--ez', 'trace-skia', 'true']);
+    if (debuggingOptions.enableSkiaShaper)
+      cmd.addAll(<String>['--ez', 'enable-skia-shaper', 'true']);
     if (debuggingOptions.traceSystrace)
       cmd.addAll(<String>['--ez', 'trace-systrace', 'true']);
     if (debuggingOptions.dumpSkpOnShaderCompilation)

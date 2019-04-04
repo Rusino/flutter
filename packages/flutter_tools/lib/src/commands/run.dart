@@ -89,6 +89,10 @@ class RunCommand extends RunCommandBase {
         help: 'When combined with --enable-software-rendering, provides 100% '
               'deterministic Skia rendering.',
       )
+      ..addFlag('enable-skia-shaper',
+        negatable: false,
+        help: '???',
+      )
       ..addFlag('trace-skia',
         negatable: false,
         help: 'Enable tracing of Skia code. This is useful when debugging '
@@ -265,6 +269,7 @@ class RunCommand extends RunCommandBase {
         enableSoftwareRendering: argResults['enable-software-rendering'],
         skiaDeterministicRendering: argResults['skia-deterministic-rendering'],
         traceSkia: argResults['trace-skia'],
+        enableSkiaShaper: argResults['enable-skia-shaper'],
         traceSystrace: argResults['trace-systrace'],
         dumpSkpOnShaderCompilation: argResults['dump-skp-on-shader-compilation'],
         observatoryPort: observatoryPort,
