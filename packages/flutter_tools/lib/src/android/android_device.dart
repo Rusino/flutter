@@ -478,6 +478,8 @@ class AndroidDevice extends Device {
       cmd.addAll(<String>['--ez', 'skia-deterministic-rendering', 'true']);
     if (debuggingOptions.traceSkia)
       cmd.addAll(<String>['--ez', 'trace-skia', 'true']);
+    if (debuggingOptions.enableSkiaShaper)
+      cmd.addAll(<String>['--ez', 'enable-skia-shaper', 'true']);
     if (debuggingOptions.traceSystrace)
       cmd.addAll(<String>['--ez', 'trace-systrace', 'true']);
     if (debuggingOptions.dumpSkpOnShaderCompilation)

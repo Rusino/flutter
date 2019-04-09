@@ -381,6 +381,7 @@ class DebuggingOptions {
     this.enableSoftwareRendering = false,
     this.skiaDeterministicRendering = false,
     this.traceSkia = false,
+    this.enableSkiaShaper = false,
     this.traceSystrace = false,
     this.dumpSkpOnShaderCompilation = false,
     this.useTestFonts = false,
@@ -397,6 +398,7 @@ class DebuggingOptions {
       enableSoftwareRendering = false,
       skiaDeterministicRendering = false,
       traceSkia = false,
+      enableSkiaShaper = false,
       traceSystrace = false,
       dumpSkpOnShaderCompilation = false,
       verboseSystemLogs = false,
@@ -411,6 +413,7 @@ class DebuggingOptions {
   final bool enableSoftwareRendering;
   final bool skiaDeterministicRendering;
   final bool traceSkia;
+  final bool enableSkiaShaper;
   final bool traceSystrace;
   final bool dumpSkpOnShaderCompilation;
   final bool useTestFonts;
