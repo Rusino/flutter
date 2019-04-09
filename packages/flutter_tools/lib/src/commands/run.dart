@@ -258,10 +258,17 @@ class RunCommand extends RunCommandBase {
   }
 
   DebuggingOptions _createDebuggingOptions() {
+
     final BuildInfo buildInfo = getBuildInfo();
     if (buildInfo.isRelease) {
       return DebuggingOptions.disabled(buildInfo);
     } else {
+      printStatus('_createDebuggingOptions: debug');
+      if (argResults['enable-skia-shaper']) {
+        printStatus('enable-skia-shaper: true');
+      } else {
+        printStatus('enable-skia-shaper: false');
+      }
       return DebuggingOptions.enabled(
         buildInfo,
         startPaused: argResults['start-paused'],
