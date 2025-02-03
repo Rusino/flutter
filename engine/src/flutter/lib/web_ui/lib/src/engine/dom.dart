@@ -4232,7 +4232,7 @@ extension WebTextMetricsExtension on DomTextMetrics {
 
 extension WebDomCanvasRenderingContext2DExtension on DomCanvasRenderingContext2D {
   @JS('fillTextCluster')
-  external void _fillTextCluster(JSAny);
+  external void _fillTextCluster(JSAny? textCluster);
 
   void fillTextCluster(WebTextCluster textCluster) => _fillTextCluster(textCluster.toJSAnyDeep);
 }
