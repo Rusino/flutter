@@ -4223,11 +4223,7 @@ extension WebTextClusterExtension on WebTextCluster {
   int end() => _end;
 }
 
-@JS()
-@staticInterop
-class WebTextMetrics extends DomTextMetrics {}
-
-extension WebTextMetricsExtension on WebTextMetrics {
+extension WebTextMetricsExtension on DomTextMetrics {
   @JS('getTextClusters')
   external JSArray<JSAny?> _getTextClusters();
 
