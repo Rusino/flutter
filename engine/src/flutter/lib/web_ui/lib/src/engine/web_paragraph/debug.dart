@@ -4,9 +4,16 @@
 
 class WebParagraphDebug {
   static bool logging = false;
+  static bool apiLogging = true;
 
   static void log(String arg) {
     if (logging) {
+      print(arg);
+    }
+  }
+
+  static void apiTrace(String arg) {
+    if (apiLogging) {
       print(arg);
     }
   }

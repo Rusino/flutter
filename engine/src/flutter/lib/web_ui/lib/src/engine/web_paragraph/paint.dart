@@ -94,7 +94,7 @@ class TextPaint {
         continue;
       }
       WebParagraphDebug.log(
-        'paintByClusters: ${line.fontBoundingBoxAscent} - ${block.rawFontBoundingBoxAscent}',
+        'paintByClusters: ${line.advance.left} + ${line.formattingShift} + ${block.clusterShiftInLine}',
       );
       final int start = block.bidiLevel.isEven
           ? block.clusterRange.start
@@ -162,7 +162,7 @@ class TextPaint {
 
     final String text = paragraph.getText(webTextCluster.textRange);
     WebParagraphDebug.log(
-      'calculateBlock "$text" ${block.textRange}-${block.textMetricsZero} ${block.clusterRange} source: $sourceRect => target: $targetRect',
+      'calculateCluster "$text" ${block.textRange}-${block.textMetricsZero} ${block.clusterRange} source: $sourceRect => target: $targetRect',
     );
 
     return (sourceRect, targetRect);

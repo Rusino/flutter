@@ -25,7 +25,9 @@ class WebParagraphStyle implements ui.ParagraphStyle {
     String? fontFamily,
     double? fontSize,
     ui.FontStyle? fontStyle,
+    ui.StrutStyle? strutStyle,
     ui.FontWeight? fontWeight,
+    ui.Color? color,
     ui.Paint? foreground,
     ui.Paint? background,
     List<ui.Shadow>? shadows,
@@ -40,6 +42,7 @@ class WebParagraphStyle implements ui.ParagraphStyle {
          fontSize: fontSize,
          fontStyle: fontStyle,
          fontWeight: fontWeight,
+         color: color,
          foreground: foreground,
          background: background,
          shadows: shadows,
@@ -50,10 +53,12 @@ class WebParagraphStyle implements ui.ParagraphStyle {
          letterSpacing: letterSpacing,
          wordSpacing: wordSpacing,
        ),
+       _strutStyle = strutStyle,
        _textDirection = textDirection ?? ui.TextDirection.ltr,
        _textAlign = textAlign ?? ui.TextAlign.start;
 
   final WebTextStyle _defaultTextStyle;
+  final ui.StrutStyle? _strutStyle;
   final ui.TextDirection _textDirection;
   final ui.TextAlign _textAlign;
 
@@ -61,8 +66,8 @@ class WebParagraphStyle implements ui.ParagraphStyle {
     return _defaultTextStyle;
   }
 
+  ui.StrutStyle? get strutStyle => _strutStyle;
   ui.TextDirection get textDirection => _textDirection;
-
   ui.TextAlign get textAlign => _textAlign;
 
   @override
@@ -88,6 +93,8 @@ class WebParagraphStyle implements ui.ParagraphStyle {
       result =
           'WebParagraphStyle('
           'defaultTextStyle: $_defaultTextStyle'
+          'strutStyle: $_strutStyle'
+          'textAlign: $_textAlign'
           ')';
       return true;
     }());
@@ -122,6 +129,7 @@ class WebTextStyle implements ui.TextStyle {
     double? fontSize,
     ui.FontStyle? fontStyle,
     ui.FontWeight? fontWeight,
+    ui.Color? color,
     ui.Paint? foreground,
     ui.Paint? background,
     List<ui.Shadow>? shadows,
@@ -140,6 +148,7 @@ class WebTextStyle implements ui.TextStyle {
       fontSize: fontSize,
       fontStyle: fontStyle,
       fontWeight: fontWeight,
+      color: color,
       foreground: foreground,
       background: background,
       shadows: shadows,
@@ -160,6 +169,7 @@ class WebTextStyle implements ui.TextStyle {
     required this.fontSize,
     required this.fontStyle,
     required this.fontWeight,
+    required this.color,
     required this.foreground,
     required this.background,
     required this.shadows,
@@ -178,6 +188,7 @@ class WebTextStyle implements ui.TextStyle {
   double? fontSize;
   ui.FontStyle? fontStyle;
   ui.FontWeight? fontWeight;
+  ui.Color? color;
   ui.Paint? foreground;
   ui.Paint? background;
   final List<ui.Shadow>? shadows;
@@ -201,6 +212,7 @@ class WebTextStyle implements ui.TextStyle {
       fontSize: other.fontSize ?? fontSize,
       fontStyle: other.fontStyle ?? fontStyle,
       fontWeight: other.fontWeight ?? fontWeight,
+      color: other.color ?? color,
       foreground: other.foreground ?? foreground,
       background: other.background ?? background,
       shadows: other.shadows ?? shadows,
@@ -221,164 +233,26 @@ class WebTextStyle implements ui.TextStyle {
     fontSize ??= StyleManager.defaultFontSize;
     fontStyle ??= ui.FontStyle.normal;
     fontWeight ??= ui.FontWeight.normal;
-    foreground ??= ui.Paint()..color = const ui.Color(0xFF000000);
+    color ??= const ui.Color(0xFFFFFFFF);
+    foreground ??= ui.Paint()..color = color!;
     background ??= ui.Paint()..color = const ui.Color(0x00000000);
-  }
-
-  bool paintsEqual(ui.Paint? a, ui.Paint? b) {
-    if (a == null) {
-      if (b == null) {
-        return true;
-      } else {
-        //WebParagraphDebug.log('null != !null');
-        return false;
-      }
-    }
-    if (b == null) {
-      //WebParagraphDebug.log('!null != null');
-      return false;
-    }
-    if (a == ui.Paint() && b == ui.Paint()) {
-      WebParagraphDebug.log('Paint() are equal');
-      return true;
-    }
-    if (a.blendMode != b.blendMode) {
-      WebParagraphDebug.log('blendMode are not equal');
-      return false;
-    }
-    if (a.color != b.color) {
-      WebParagraphDebug.log('color are not equal');
-      return false;
-    }
-    if (a.colorFilter != b.colorFilter) {
-      WebParagraphDebug.log('colorFilter are not equal');
-      return false;
-    }
-    if (a.filterQuality != b.filterQuality) {
-      WebParagraphDebug.log('filterQuality are not equal');
-      return false;
-    }
-    if (a.imageFilter != b.imageFilter) {
-      WebParagraphDebug.log('imageFilter are not equal');
-      return false;
-    }
-    if (a.invertColors != b.invertColors) {
-      WebParagraphDebug.log('invertColors are not equal');
-      return false;
-    }
-    if (a.isAntiAlias != b.isAntiAlias) {
-      WebParagraphDebug.log('isAntiAlias are not equal');
-      return false;
-    }
-    if (a.maskFilter != b.maskFilter) {
-      WebParagraphDebug.log('maskFilter are not equal');
-      return false;
-    }
-    if (a.shader != b.shader) {
-      WebParagraphDebug.log('shader are not equal');
-      return false;
-    }
-    if (a.strokeCap != b.strokeCap) {
-      WebParagraphDebug.log('strokeCap are not equal');
-      return false;
-    }
-    if (a.strokeJoin != b.strokeJoin) {
-      WebParagraphDebug.log('strokeJoin are not equal');
-      return false;
-    }
-    if (a.strokeMiterLimit != b.strokeMiterLimit) {
-      WebParagraphDebug.log('strokeMiterLimit are not equal');
-      return false;
-    }
-    if (a.strokeWidth != b.strokeWidth) {
-      WebParagraphDebug.log('strokeWidth are not equal');
-      return false;
-    }
-    if (a.style != b.style) {
-      WebParagraphDebug.log('strokeWidth are not equal');
-      return false;
-    }
-    return true;
   }
 
   @override
   bool operator ==(Object other) {
-    //WebParagraphDebug.log('WebTextStyle ==');
     if (identical(this, other)) {
       return true;
     }
     if (other is! WebTextStyle) {
-      WebParagraphDebug.log('other is not WebTextStyle: $other');
       return false;
     }
-    final WebTextStyle otherStyle = other as WebTextStyle;
-    if (!(otherStyle.originalFontFamily == originalFontFamily)) {
-      WebParagraphDebug.log(
-        'originalFontFamily $originalFontFamily != ${otherStyle.originalFontFamily}',
-      );
-    }
-    if (!(otherStyle.fontStyle == fontStyle)) {
-      WebParagraphDebug.log('fontStyle $fontStyle != ${otherStyle.fontStyle}');
-    }
-    if (!(otherStyle.fontSize == fontSize)) {
-      WebParagraphDebug.log('fontSize $fontSize != ${otherStyle.fontSize}');
-    }
-    if (!(otherStyle.fontWeight == fontWeight)) {
-      WebParagraphDebug.log('fontWeight $fontWeight != ${otherStyle.fontWeight}');
-    }
-    if (!paintsEqual(otherStyle.foreground, foreground)) {
-      WebParagraphDebug.log('foreground $foreground != ${otherStyle.foreground}');
-    }
-    if (!paintsEqual(otherStyle.background, background)) {
-      WebParagraphDebug.log('background $background != ${otherStyle.background}');
-    }
-    if (!(otherStyle.shadows == shadows)) {
-      WebParagraphDebug.log('shadows $shadows != ${otherStyle.shadows}');
-    }
-    if (!(otherStyle.decoration == decoration)) {
-      WebParagraphDebug.log('decoration $decoration != ${otherStyle.decoration}');
-    }
-    if (!(otherStyle.decorationColor == decorationColor)) {
-      WebParagraphDebug.log('decorationColor $decorationColor != ${otherStyle.decorationColor}');
-    }
-    if (!(otherStyle.decorationStyle == decorationStyle)) {
-      WebParagraphDebug.log('decorationStyle $decorationStyle != ${otherStyle.decorationStyle}');
-    }
-    if (!(otherStyle.decorationThickness == decorationThickness)) {
-      WebParagraphDebug.log(
-        'decorationThickness $decorationThickness != ${otherStyle.decorationThickness}',
-      );
-    }
-    if (!(otherStyle.letterSpacing == letterSpacing)) {
-      WebParagraphDebug.log('letterSpacing $letterSpacing != ${otherStyle.letterSpacing}');
-    }
-    if (!(otherStyle.wordSpacing == wordSpacing)) {
-      WebParagraphDebug.log('wordSpacing $wordSpacing != ${otherStyle.wordSpacing}');
-    }
-    if (!(otherStyle.height == height)) {
-      WebParagraphDebug.log('height $height != ${otherStyle.height}');
-    }
-    if (!(otherStyle.fontFeatures == fontFeatures)) {
-      WebParagraphDebug.log('fontFeatures $fontFeatures != ${otherStyle.fontFeatures}');
-    }
-    if (!(otherStyle.fontVariations == fontVariations)) {
-      WebParagraphDebug.log('fontVariations $fontVariations != ${otherStyle.fontVariations}');
-    }
-    /*
-    if (!(otherStyle.foreground == foreground)) {
-      WebParagraphDebug.log('foreground are not ==');
-    }
-    if (!(otherStyle.background == background)) {
-      WebParagraphDebug.log('background are not ==\n');
-    }
-    */
-    return other is WebTextStyle &&
-        other.originalFontFamily == originalFontFamily &&
+    return other.originalFontFamily == originalFontFamily &&
         other.fontSize == fontSize &&
         other.fontStyle == fontStyle &&
         other.fontWeight == fontWeight &&
-        paintsEqual(other.foreground, foreground) &&
-        paintsEqual(other.background, background) &&
+        other.color == color &&
+        other.foreground != foreground &&
+        other.background != background &&
         other.shadows == shadows &&
         other.decoration == decoration &&
         other.decorationColor == decorationColor &&
@@ -398,6 +272,7 @@ class WebTextStyle implements ui.TextStyle {
       fontSize,
       fontStyle,
       fontWeight,
+      color,
       foreground,
       background,
       shadows,
@@ -413,13 +288,12 @@ class WebTextStyle implements ui.TextStyle {
     );
   }
 
-  String _simplePaintToString(ui.Paint? paint) {
-    if (paint != null) {
-      return '[${paint.color.alpha.toRadixString(16).padLeft(2, '0')},'
-          '${paint.color.red.toRadixString(16).padLeft(2, '0')},'
-          '${paint.color.green.toRadixString(16).padLeft(2, '0')},'
-          '${paint.color.blue.toRadixString(16).padLeft(2, '0')}]'
-          /*
+  String _colorToString(ui.Color color) {
+    return '[${color.alpha.toRadixString(16).padLeft(2, '0')},'
+        '${color.red.toRadixString(16).padLeft(2, '0')},'
+        '${color.green.toRadixString(16).padLeft(2, '0')},'
+        '${color.blue.toRadixString(16).padLeft(2, '0')}]'
+        /*
           'colorFilter:${paint.colorFilter}\n'
           'strokeWidth:${paint.strokeWidth}\n'
           'strokeMiterLimit:${paint.strokeMiterLimit}\n'
@@ -435,9 +309,7 @@ class WebTextStyle implements ui.TextStyle {
           '${paint.invertColors ? 'invertColors,' : 'null invertColors'}\n'
           '${paint.filterQuality != ui.FilterQuality.none ? 'filterQuality:${paint.filterQuality},' : 'none filterQuality'}'
           */
-          '';
-    }
-    return 'null';
+        '';
   }
 
   @override
@@ -450,8 +322,9 @@ class WebTextStyle implements ui.TextStyle {
           'fontSize: ${fontSize != null ? fontSize.toStringAsFixed(1) : ""}px '
           'fontStyle: ${fontStyle != null ? fontStyle.toString().replaceFirst("FontStyle.", "") : ""} '
           'fontWeight: ${fontWeight != null ? fontWeight.toString().replaceFirst("FontWeight.", "") : ""} '
-          'foreground: ${_simplePaintToString(foreground)} '
-          'background: ${_simplePaintToString(background)} '
+          'color: ${color != null ? _colorToString(color!) : ''} '
+          'foreground: ${foreground != null && foreground?.color != null ? _colorToString(foreground!.color) : ''} '
+          'background: ${background != null && background?.color != null ? _colorToString(background!.color) : ''} '
           '';
       if (shadows != null && shadows!.isNotEmpty) {
         result += 'shadows(${shadows!.length}) ';
@@ -705,19 +578,62 @@ class StyledTextRange extends TextRange {
 }
 
 class WebStrutStyle implements ui.StrutStyle {
-  WebStrutStyle();
+  WebStrutStyle({
+    this.fontFamily,
+    this.fontFamilyFallback,
+    this.fontSize,
+    double? height,
+    // TODO(mdebbar): implement leadingDistribution.
+    this.leadingDistribution,
+    this.leading,
+    this.fontWeight,
+    this.fontStyle,
+    this.forceStrutHeight,
+  }) : height = height == ui.kTextHeightNone ? null : height;
+
+  final String? fontFamily;
+  final List<String>? fontFamilyFallback;
+  final double? fontSize;
+  final double? height;
+  final double? leading;
+  final ui.FontWeight? fontWeight;
+  final ui.FontStyle? fontStyle;
+  final bool? forceStrutHeight;
+  final ui.TextLeadingDistribution? leadingDistribution;
+  double strutAscent = 0;
+  double strutDescent = 0;
+  double strutLeading = 0;
 
   @override
   bool operator ==(Object other) {
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    return other is WebStrutStyle;
+    return other is WebStrutStyle &&
+        other.fontFamily == fontFamily &&
+        other.fontSize == fontSize &&
+        other.height == height &&
+        other.leading == leading &&
+        other.leadingDistribution == leadingDistribution &&
+        other.fontWeight == fontWeight &&
+        other.fontStyle == fontStyle &&
+        other.forceStrutHeight == forceStrutHeight &&
+        listEquals<String>(other.fontFamilyFallback, fontFamilyFallback);
   }
 
   @override
   int get hashCode {
-    return Object.hash(null, null);
+    return Object.hash(
+      fontFamily,
+      fontFamilyFallback != null ? Object.hashAll(fontFamilyFallback!) : null,
+      fontSize,
+      height,
+      leading,
+      leadingDistribution,
+      fontWeight,
+      fontStyle,
+      forceStrutHeight,
+    );
   }
 }
 
@@ -790,74 +706,56 @@ class WebParagraph implements ui.Paragraph {
     ui.BoxHeightStyle boxHeightStyle = ui.BoxHeightStyle.tight,
     ui.BoxWidthStyle boxWidthStyle = ui.BoxWidthStyle.tight,
   }) {
-    return _layout.getBoxesForRange(start, end, boxHeightStyle, boxWidthStyle);
+    final result = _layout.getBoxesForRange(start, end, boxHeightStyle, boxWidthStyle);
+    WebParagraphDebug.apiTrace(
+      'getBoxesForRange("$text", $start, $end, $boxHeightStyle, $boxWidthStyle): $result',
+    );
+    return result;
   }
 
   @override
   ui.TextPosition getPositionForOffset(ui.Offset offset) {
-    return _layout.getPositionForOffset(offset);
+    final ui.TextPosition result = text.isEmpty
+        ? const ui.TextPosition(offset: 0)
+        : _layout.getPositionForOffset(offset);
+    WebParagraphDebug.apiTrace('getPositionForOffset("$text", $offset): $result');
+    return result;
   }
 
   @override
   ui.GlyphInfo? getClosestGlyphInfoForOffset(ui.Offset offset) {
     final position = _layout.getPositionForOffset(offset);
-    WebParagraphDebug.log('getClosestGlyphInfoForOffset($offset): $position');
     assert(position.offset != 0 || position.affinity != ui.TextAffinity.upstream);
-    assert(position.offset < text.length);
-    return getGlyphInfoAt(position.offset);
+    assert(position.offset < text.length || text.isEmpty);
+    final result = getGlyphInfoAt(position.offset);
+    if (result == null) {
+      WebParagraphDebug.apiTrace(
+        'getClosestGlyphInfoForOffset("$text", ${offset.dx}, ${offset.dy}): '
+        'TextPosition(${position.offset},${position.affinity.toString().replaceFirst('TextAffinity.', '')}) Glyph: null',
+      );
+      return null;
+    }
+
+    WebParagraphDebug.apiTrace(
+      'getClosestGlyphInfoForOffset("$text", ${offset.dx}, ${offset.dy}): '
+      'TextPosition(${position.offset},${position.affinity.toString().replaceFirst('TextAffinity.', '')} '
+      '${result.graphemeClusterLayoutBounds} '
+      'TextRange: [${result.graphemeClusterCodeUnitRange.start}:${result.graphemeClusterCodeUnitRange.end}) '
+      'TextDirection: ${result.writingDirection.toString().replaceFirst('TextDirection.', '')} ',
+    );
+
+    return result;
   }
 
   @override
   ui.GlyphInfo? getGlyphInfoAt(int codeUnitOffset) {
-    WebParagraphDebug.log('getGlyphInfoAt($codeUnitOffset)');
-    final clusterRange = _layout.convertTextToClusterRange(
-      TextRange(start: codeUnitOffset, end: codeUnitOffset + 1),
-    );
-    if (clusterRange.isEmpty) {
-      return null;
-    }
-    for (final line in _layout.lines) {
-      if (line.allLineTextRange.start > codeUnitOffset) {
-        // No more lines can contain the cluster
-        break;
-      } else if (line.allLineTextRange.end <= codeUnitOffset) {
-        // The cluster is not on this line
-        continue;
-      }
-      // The cluster is on this line
-      for (final visualBlock in line.visualBlocks) {
-        if (visualBlock.clusterRange.start > clusterRange.start) {
-          // No more visual blocks can contain the cluster
-          break;
-        } else if (visualBlock.clusterRange.end <= clusterRange.start) {
-          // The cluster is not in this visual block
-          continue;
-        }
-        // The cluster is in this visual block
-        for (int i = visualBlock.clusterRange.start; i < visualBlock.clusterRange.end; i++) {
-          if (i < clusterRange.start) {
-            continue;
-          } else if (i >= clusterRange.end) {
-            break;
-          }
-          final cluster = _layout.textClusters[i];
-          return ui.GlyphInfo(
-            cluster.advance.translate(
-              line.advance.left + line.formattingShift + visualBlock.clusterShiftInLine,
-              line.advance.top + line.fontBoundingBoxAscent,
-            ),
-            ui.TextRange(start: cluster.textRange.start, end: cluster.textRange.end),
-            _layout.detectTextDirection(clusterRange),
-          );
-        }
-      }
-    }
-    return null;
+    final result = _layout.getGlyphInfoAt(codeUnitOffset);
+    WebParagraphDebug.apiTrace('getGlyphInfoAt("$text", $codeUnitOffset): $result');
+    return result;
   }
 
   @override
   ui.TextRange getWordBoundary(ui.TextPosition position) {
-    WebParagraphDebug.log('getWordBoundary($position)');
     final int codepointPosition = switch (position.affinity) {
       ui.TextAffinity.upstream => position.offset - 1,
       ui.TextAffinity.downstream => position.offset,
@@ -868,12 +766,20 @@ class WebParagraph implements ui.Paragraph {
     if (codepointPosition >= text.length) {
       return ui.TextRange(start: text.length, end: text.length);
     }
-    return _layout.getWordBoundary(codepointPosition);
+    final result = _layout.getWordBoundary(codepointPosition);
+    WebParagraphDebug.apiTrace('getWordBoundary("$text", $position): $result');
+    return result;
   }
 
   @override
   void layout(ui.ParagraphConstraints constraints) {
     _layout.performLayout(constraints.width);
+    WebParagraphDebug.apiTrace(
+      'layout("$text", ${constraints.width.toStringAsFixed(4)}}): '
+      'width=${_width.toStringAsFixed(4)} height=${_height.toStringAsFixed(4)} '
+      'minIntrinsicWidth=${_minIntrinsicWidth.toStringAsFixed(4)} maxIntrinsicWidth=${_maxIntrinsicWidth.toStringAsFixed(4)} '
+      'longestLine=${_longestLine.toStringAsFixed(4)} lines=${_layout.lines.length} ',
+    );
   }
 
   void paint(ui.Canvas canvas, ui.Offset offset) {
@@ -884,23 +790,18 @@ class WebParagraph implements ui.Paragraph {
 
   @override
   ui.TextRange getLineBoundary(ui.TextPosition position) {
-    WebParagraphDebug.log('getLineBoundary($position)');
     final int codepointPosition = switch (position.affinity) {
       ui.TextAffinity.upstream => position.offset - 1,
       ui.TextAffinity.downstream => position.offset,
     };
-    for (final line in _layout.lines) {
-      if (line.allLineTextRange.start <= codepointPosition &&
-          line.allLineTextRange.end > codepointPosition) {
-        return ui.TextRange(start: line.allLineTextRange.start, end: line.allLineTextRange.end);
-      }
-    }
-    return ui.TextRange.empty;
+    final result = _layout.getLineBoundary(codepointPosition);
+    WebParagraphDebug.apiTrace('getLineBoundary("$text", $position): $result');
+    return result;
   }
 
   @override
   List<ui.LineMetrics> computeLineMetrics() {
-    WebParagraphDebug.log('computeLineMetrics()');
+    WebParagraphDebug.apiTrace('computeLineMetrics("$text")');
     final List<ui.LineMetrics> metrics = <ui.LineMetrics>[];
     for (final line in _layout.lines) {
       metrics.add(line.getMetrics());
@@ -910,10 +811,13 @@ class WebParagraph implements ui.Paragraph {
 
   @override
   ui.LineMetrics? getLineMetricsAt(int lineNumber) {
-    WebParagraphDebug.log('getLineMetricsAt($lineNumber)');
     if (lineNumber < 0 || lineNumber >= _layout.lines.length) {
+      WebParagraphDebug.apiTrace('getLineMetricsAt("$text", $lineNumber): null (out of range)');
       return null;
     }
+    WebParagraphDebug.apiTrace(
+      'getLineMetricsAt($lineNumber): ${_layout.lines[lineNumber].getMetrics()}',
+    );
     return _layout.lines[lineNumber].getMetrics();
   }
 
@@ -924,13 +828,14 @@ class WebParagraph implements ui.Paragraph {
 
   @override
   int? getLineNumberAt(int codeUnitOffset) {
-    WebParagraphDebug.log('getLineNumberAt($codeUnitOffset)');
     for (final line in _layout.lines) {
       if (line.allLineTextRange.start <= codeUnitOffset &&
           line.allLineTextRange.end > codeUnitOffset) {
+        WebParagraphDebug.apiTrace('getLineNumberAt("$text", $codeUnitOffset): ${line.lineNumber}');
         return line.lineNumber;
       }
     }
+    WebParagraphDebug.apiTrace('getLineNumberAt("$text", $codeUnitOffset): null (out of range)');
     return null;
   }
 
@@ -1078,7 +983,7 @@ class WebParagraphBuilder implements ui.ParagraphBuilder {
     : paragraphStyle = paragraphStyle as WebParagraphStyle,
       textStylesList = <StyledTextRange>[StyledTextRange.zero(paragraphStyle.getTextStyle())],
       textStylesStack = <WebTextStyle>[paragraphStyle.getTextStyle()] {
-    WebParagraphDebug.log('WebParagraphBuilder($paragraphStyle)');
+    WebParagraphDebug.apiTrace('WebParagraphBuilder($paragraphStyle)');
   }
 
   final WebParagraphStyle paragraphStyle;
@@ -1147,7 +1052,8 @@ class WebParagraphBuilder implements ui.ParagraphBuilder {
     finishStyledTextRange();
 
     // We only keep the default style if it has some text
-    if (textStylesList.first.isEmpty) {
+    // but we need to keep one style for an empty paragraph
+    if (textStylesList.first.isEmpty && textStylesList.length > 1) {
       textStylesList.removeAt(0);
     }
 
@@ -1156,9 +1062,9 @@ class WebParagraphBuilder implements ui.ParagraphBuilder {
     }
 
     final WebParagraph builtParagraph = WebParagraph(paragraphStyle, textStylesList, text);
-    WebParagraphDebug.log('WebParagraphBuilder.build(): "$text" ${textStylesList.length}');
+    WebParagraphDebug.apiTrace('WebParagraphBuilder.build(): "$text" ${textStylesList.length}');
     for (var i = 0; i < textStylesList.length; ++i) {
-      WebParagraphDebug.log('$i: ${textStylesList[i]}');
+      WebParagraphDebug.apiTrace('$i: ${textStylesList[i]}');
     }
     return builtParagraph;
   }

@@ -30,7 +30,12 @@ class TextWrapper {
   double _maxIntrinsicWidth = 0.0;
 
   double get minIntrinsicWidth => _minIntrinsicWidth;
-  double _minIntrinsicWidth = double.infinity;
+  double _minIntrinsicWidth = 0.0;
+
+  double get longestLine => _longestLine;
+  double _longestLine = 0.0;
+
+  double get height => _top;
 
   bool isWhitespace(ExtendedTextCluster cluster) {
     return _layout.codeUnitFlags[cluster.textRange.start].isWhitespace;
@@ -52,7 +57,6 @@ class TextWrapper {
     _whitespaces = ClusterRange.collapsed(start);
     _widthText = 0.0;
     _widthWhitespaces = 0.0;
-    _minIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthLetters);
     _widthLetters = clusterWidth;
   }
 
@@ -79,6 +83,7 @@ class TextWrapper {
           _whitespaces.end = index;
         }
         _maxIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthText);
+        _longestLine = math.max(_longestLine, _widthText);
         _top += _layout.addLine(
           ClusterRange(start: _startLine, end: _whitespaces.start),
           _whitespaces.clone(),
@@ -103,7 +108,7 @@ class TextWrapper {
           // Close the softBreak sequence
           _whitespaces.end = index;
           // Start a new cluster sequence
-          _minIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthLetters);
+          _minIntrinsicWidth = math.max(_minIntrinsicWidth, _widthLetters);
           _widthLetters = 0.0;
         }
       }
@@ -114,7 +119,7 @@ class TextWrapper {
         if (_whitespaces.end != index) {
           // Start a new (empty) whitespace sequence
           _widthText += _widthWhitespaces + _widthLetters;
-          _minIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthLetters);
+          _minIntrinsicWidth = math.max(_minIntrinsicWidth, _widthLetters);
           _widthLetters = 0.0;
           _whitespaces = ClusterRange.collapsed(index);
           _widthWhitespaces = 0.0;
@@ -139,7 +144,7 @@ class TextWrapper {
             // We possibly have some leading spaces and some text after
             _widthText = _widthWhitespaces + _widthLetters;
             _widthWhitespaces = 0.0;
-            _minIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthLetters);
+            _minIntrinsicWidth = math.max(_minIntrinsicWidth, _widthLetters);
             _widthLetters = 0.0;
             _whitespaces.start = _whitespaces.end = index;
           } else {
@@ -161,6 +166,7 @@ class TextWrapper {
 
         // Add the line
         _maxIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthText);
+        _longestLine = math.max(_longestLine, _widthText);
         _top += _layout.addLine(
           ClusterRange(start: _startLine, end: _whitespaces.start),
           ClusterRange(start: _whitespaces.start, end: _whitespaces.end),
@@ -183,9 +189,17 @@ class TextWrapper {
       _whitespaces = ClusterRange.collapsed(_layout.textClusters.length - 1);
       _widthWhitespaces = 0.0;
       _widthText += _widthLetters;
+    } else if (_layout.lines.isEmpty && _whitespaces.start == _startLine) {
+      // _whitespaces.end == _layout.textClusters.length - 1
+      // Special case: we have only whitespaces in the whole paragraph
+      _maxIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthWhitespaces);
+      _minIntrinsicWidth = math.max(_minIntrinsicWidth, _widthWhitespaces);
+      _longestLine = math.max(_longestLine, _widthWhitespaces);
     }
 
     _maxIntrinsicWidth = math.max(_maxIntrinsicWidth, _widthText);
+    _minIntrinsicWidth = math.max(_minIntrinsicWidth, _widthLetters);
+    _longestLine = math.max(_longestLine, _widthText);
     _top += _layout.addLine(
       ClusterRange(start: _startLine, end: _whitespaces.start),
       _whitespaces.clone(),

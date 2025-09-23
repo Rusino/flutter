@@ -344,6 +344,7 @@ class CanvasKitRenderer extends Renderer {
       ? WebTextStyle(
           fontFamily: fontFamily,
           fontSize: fontSize,
+          color: color,
           foreground: foreground,
           background: background,
         )
@@ -419,7 +420,17 @@ class CanvasKitRenderer extends Renderer {
     ui.FontStyle? fontStyle,
     bool? forceStrutHeight,
   }) => isExperimentalWebParagraph
-      ? WebStrutStyle()
+      ? WebStrutStyle(
+          fontFamily: fontFamily,
+          fontFamilyFallback: fontFamilyFallback,
+          fontSize: fontSize,
+          height: height,
+          leadingDistribution: leadingDistribution,
+          leading: leading,
+          fontWeight: fontWeight,
+          fontStyle: fontStyle,
+          forceStrutHeight: forceStrutHeight,
+        )
       : CkStrutStyle(
           fontFamily: fontFamily,
           fontFamilyFallback: fontFamilyFallback,

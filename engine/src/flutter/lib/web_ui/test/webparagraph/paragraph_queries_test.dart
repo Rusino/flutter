@@ -7,6 +7,7 @@ import 'package:ui/src/engine.dart';
 import 'package:ui/ui.dart' as ui;
 
 import '../common/test_initialization.dart';
+import 'paragraph_placeholders_test.dart';
 
 void main() {
   internalBootstrapBrowserTest(() => testMain);
@@ -14,6 +15,36 @@ void main() {
 
 Future<void> testMain() async {
   setUpUnitTests(withImplicitView: true, setUpTestViewDimensions: false);
+
+  test('Paragraph empty text', () {
+    final WebParagraphStyle paragraphStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 20);
+
+    final WebParagraphBuilder builder = WebParagraphBuilder(paragraphStyle);
+    builder.addText('');
+    final WebParagraph paragraph = builder.build();
+    paragraph.layout(const ui.ParagraphConstraints(width: double.infinity));
+    expect(paragraph.width, double.infinity);
+    expect(paragraph.height, closeTo(22.0, EPSILON));
+    expect(paragraph.minIntrinsicWidth, closeTo(0.0, EPSILON));
+    expect(paragraph.maxIntrinsicWidth, closeTo(0.0, EPSILON));
+    expect(paragraph.longestLine, double.negativeInfinity);
+    expect(paragraph.numberOfLines, 0);
+  });
+
+  test('Paragraph whitespaces', () {
+    final WebParagraphStyle paragraphStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 20);
+
+    final WebParagraphBuilder builder = WebParagraphBuilder(paragraphStyle);
+    builder.addText(' ');
+    final WebParagraph paragraph = builder.build();
+    paragraph.layout(const ui.ParagraphConstraints(width: double.infinity));
+    expect(paragraph.width, double.infinity);
+    expect(paragraph.height, closeTo(22.0, EPSILON));
+    expect(paragraph.minIntrinsicWidth, closeTo(5.556640625, EPSILON));
+    expect(paragraph.maxIntrinsicWidth, closeTo(5.556640625, EPSILON));
+    expect(paragraph.longestLine, closeTo(5.556640625, EPSILON));
+    expect(paragraph.numberOfLines, 1);
+  });
 
   test('Paragraph getWordBoundary', () {
     final WebParagraphStyle paragraphStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 20);
@@ -189,6 +220,18 @@ Future<void> testMain() async {
     expect(paragraph.getLineNumberAt(9), 1);
     expect(paragraph.getLineNumberAt(15), 2);
   });
+
+  test('Paragraph getGlyphInfoAt for a single character', () {
+    const double epsilon = 0.001;
+    final WebParagraphStyle paragraphStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 20);
+
+    final WebParagraphBuilder builder = WebParagraphBuilder(paragraphStyle);
+    builder.addText('J');
+    final WebParagraph paragraph = builder.build();
+    paragraph.layout(const ui.ParagraphConstraints(width: double.infinity));
+    final glyphInfo = paragraph.getGlyphInfoAt(0);
+    expect(glyphInfo != null, true);
+  }, solo: true);
 
   test('Paragraph getGlyphInfoAt', () {
     const double epsilon = 0.001;

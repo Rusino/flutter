@@ -10,6 +10,9 @@ import 'package:ui/ui.dart' as ui;
 
 import '../canvaskit/canvaskit_api.dart';
 import '../dom.dart';
+import '../text/paragraph.dart';
+import '../util.dart';
+import '../view_embedder/style_manager.dart';
 import 'code_unit_flags.dart';
 import 'debug.dart';
 import 'paragraph.dart';
@@ -52,11 +55,6 @@ class TextLayout {
   bool get isDefaultRtl => paragraph.paragraphStyle.textDirection == ui.TextDirection.rtl;
 
   void performLayout(double width) {
-    // TODO(jlavrova): find a less clumsy way to deal with edge cases like empty text
-    if (paragraph.text.isEmpty) {
-      return;
-    }
-
     codeUnitFlags.addAll(CodeUnitFlags.extractForParagraph(paragraph));
 
     extractClusterTexts();
@@ -64,6 +62,8 @@ class TextLayout {
     extractBidiRuns();
 
     wrapText(width);
+
+    calculateStrutMetrics();
 
     formatLines(width);
   }
@@ -87,9 +87,6 @@ class TextLayout {
     layoutContext.direction = isDefaultLtr ? 'ltr' : 'rtl';
     for (final StyledTextRange styledBlock in paragraph.styledTextRanges) {
       final String text = paragraph.getText(styledBlock);
-      if (text.isEmpty) {
-        continue;
-      }
 
       if (styledBlock.isPlaceholder) {
         assert(styledBlock.size == 1);
@@ -143,6 +140,12 @@ class TextLayout {
       );
 
       final DomTextMetrics blockTextMetrics = layoutContext.measureText(text);
+      if (paragraph.text.isEmpty) {
+        // Empty text still has to have some metrics
+        textToClusterMap[paragraph.text.length] = 0;
+        textClusters.add(ExtendedTextCluster.empty(blockTextMetrics, styledBlock.style));
+        return;
+      }
       styledTextBlocks.add(
         StyledTextBlock(styledBlock.start, styledBlock.end, styledBlock.style, blockTextMetrics),
       );
@@ -171,25 +174,20 @@ class TextLayout {
       blockStart += blockAdvance.width;
     }
 
-    if (paragraph.text.isNotEmpty) {
-      textClusters.sort((a, b) => a.textRange.start.compareTo(b.textRange.start));
-      for (int i = 0; i < textClusters.length; ++i) {
-        final ExtendedTextCluster textCluster = textClusters[i];
-        for (int j = textCluster.textRange.start; j < textCluster.textRange.end; j += 1) {
-          textToClusterMap[j] = i;
-        }
+    textClusters.sort((a, b) => a.textRange.start.compareTo(b.textRange.start));
+    for (int i = 0; i < textClusters.length; ++i) {
+      final ExtendedTextCluster textCluster = textClusters[i];
+      for (int j = textCluster.textRange.start; j < textCluster.textRange.end; j += 1) {
+        textToClusterMap[j] = i;
       }
+    }
 
-      // We need one more "fake" cluster so we can loop through clusters
-      // without checking indexes for being outside of the range
-      textToClusterMap[paragraph.text.length] = textClusters.length;
-      textClusters.add(ExtendedTextCluster.fromLast(textClusters.last));
-      if (WebParagraphDebug.logging) {
-        debugPrintClusters('Full text');
-      }
-    } else {
-      textToClusterMap[paragraph.text.length] = 0;
-      textClusters.add(ExtendedTextCluster.empty());
+    // We need one more "fake" cluster so we can loop through clusters
+    // without checking indexes for being outside of the range
+    textToClusterMap[paragraph.text.length] = textClusters.length;
+    textClusters.add(ExtendedTextCluster.fromLast(textClusters.last));
+    if (WebParagraphDebug.logging) {
+      debugPrintClusters('Full text');
     }
   }
 
@@ -271,6 +269,12 @@ class TextLayout {
   }
 
   ClusterRange convertTextToClusterRange(TextRange textRange) {
+    if (textRange.start < 0 ||
+        textRange.end > paragraph.text.length ||
+        textRange.start > textRange.end) {
+      print('TextRange $textRange is out of range: [0:${paragraph.text.length}');
+      throw ArgumentError('TextRange $textRange is out of paragraph text range');
+    }
     if (textRange.isEmpty) {
       final int clusterIndex = textToClusterMap[textRange.start]!;
       return ClusterRange(start: clusterIndex, end: clusterIndex);
@@ -313,11 +317,70 @@ class TextLayout {
   void wrapText(double width) {
     lines.clear();
 
+    if (paragraph.text.isEmpty) {
+      // Empty text still has to have some metrics
+      paragraph.width = width;
+      paragraph.maxIntrinsicWidth = 0;
+      paragraph.minIntrinsicWidth = 0;
+      paragraph.longestLine = double.negativeInfinity;
+      paragraph.height = textClusters.last.advance.height;
+      return;
+    }
+
     final TextWrapper wrapper = TextWrapper(this);
     wrapper.breakLines(width);
+    paragraph.width = width;
     paragraph.maxIntrinsicWidth = wrapper.maxIntrinsicWidth;
     paragraph.minIntrinsicWidth = wrapper.minIntrinsicWidth;
-    paragraph.requiredWidth = width;
+    paragraph.longestLine = wrapper.longestLine;
+    paragraph.height = wrapper.height;
+  }
+
+  void calculateStrutMetrics() {
+    final WebStrutStyle? strutStyle = paragraph.paragraphStyle.strutStyle as WebStrutStyle?;
+    if (strutStyle == null || strutStyle.fontSize == null || strutStyle.fontSize! < 0) {
+      return;
+    }
+
+    final String cssFontStyle =
+        strutStyle.fontStyle?.toCssString() ?? StyleManager.defaultFontStyle;
+    final String cssFontWeight =
+        strutStyle.fontWeight?.toCssString() ?? StyleManager.defaultFontWeight;
+    final int cssFontSize = (strutStyle.fontSize ?? StyleManager.defaultFontSize).floor();
+    final String cssFontFamily = canonicalizeFontFamily(strutStyle.fontFamily)!;
+
+    final String font = '$cssFontStyle $cssFontWeight ${cssFontSize}px $cssFontFamily';
+    WebParagraphDebug.log('strutfont: $font');
+
+    final DomTextMetrics strutTextMetrics = layoutContext.measureText('');
+
+    strutStyle.strutLeading = strutStyle.leading == null
+        ? 0
+        : strutStyle.leading! * strutStyle.fontSize!;
+
+    if (strutStyle.height != null) {
+      // The half leading flag doesn't take effect unless there's height override.
+      if (strutStyle.leadingDistribution == ui.TextLeadingDistribution.even) {
+        final double occupiedHeight =
+            strutTextMetrics.fontBoundingBoxAscent + strutTextMetrics.fontBoundingBoxDescent;
+        // Distribute the flexible height evenly over and under.
+        final double flexibleHeight =
+            (strutStyle.height! * strutStyle.fontSize! - occupiedHeight) / 2;
+        strutStyle.strutAscent = strutTextMetrics.fontBoundingBoxAscent + flexibleHeight;
+        strutStyle.strutDescent = strutTextMetrics.fontBoundingBoxDescent + flexibleHeight;
+      } else {
+        final double strutMetricsHeight =
+            strutTextMetrics.fontBoundingBoxAscent + strutTextMetrics.fontBoundingBoxDescent;
+        final double strutHeightMultiplier = strutMetricsHeight == 0
+            ? strutStyle.height!
+            : strutStyle.height! * strutStyle.fontSize! / strutMetricsHeight;
+        strutStyle.strutAscent = strutTextMetrics.fontBoundingBoxAscent * strutHeightMultiplier;
+        strutStyle.strutDescent = strutTextMetrics.fontBoundingBoxDescent * strutHeightMultiplier;
+      }
+    } else {
+      strutStyle.strutAscent = strutTextMetrics.fontBoundingBoxAscent;
+      strutStyle.strutDescent = strutTextMetrics.fontBoundingBoxDescent;
+    }
   }
 
   double addLine(
@@ -393,7 +456,7 @@ class TextLayout {
     for (final BidiIndex visual in visuals) {
       final BidiRun bidiRun = bidiRuns[visual.index + firstRunIndex];
       // TODO(jlavrova): we (almost always true) assume that trailing whitespaces do not affect the line height
-      final ClusterRange runClusterRange = ClusterRange.intersectClusterRange(
+      ClusterRange runClusterRange = ClusterRange.intersectClusterRange(
         bidiRun.clusterRange,
         lineClusterRange,
       );
@@ -401,13 +464,13 @@ class TextLayout {
         bidiRun.clusterRange,
         whitespacesClusterRange,
       );
-      // We ignore whitespaces because for now we only use these textStyles for decoration
-      // (and we do not decorate hanging whitespaces)
-      if (runClusterRange.isEmpty) {
-        // TODO(jlavrova): what to do with trailing whitespaces? (After implementing queries)
-        assert(!whitespacesRunClusterRange.isEmpty);
-        continue;
-      }
+
+      // We cannot ignore whitespaces because they are counted in some query apis (getBoxesForRange)
+      assert(runClusterRange.isEmpty || whitespacesRunClusterRange.isEmpty);
+      runClusterRange = ClusterRange.mergeSequentialClusterRanges(
+        runClusterRange,
+        whitespacesClusterRange,
+      );
 
       final String runText = getTextFromMonodirectionalClusterRange(runClusterRange);
       final TextRange runTextRange = convertSequentialClusterRangeToText(runClusterRange);
@@ -542,32 +605,22 @@ class TextLayout {
       for (final TextLine line in lines) {
         maxLength = math.max(maxLength, line.advance.width);
       }
-      paragraph.requiredWidth = maxLength;
-    } else {
-      paragraph.requiredWidth = width;
+      return;
     }
 
     for (final TextLine line in lines) {
-      final double delta = paragraph.requiredWidth - line.advance.width;
-      if (delta <= 0) {
-        continue;
+      final double delta = paragraph.width - line.advance.width;
+      if (delta > 0) {
+        // We do nothing for left align
+        if (effectiveAlign == ui.TextAlign.justify) {
+          // TODO(jlavrova): implement justi     } else if (effectiveAlign == ui.TextAlign.right) {
+          line.formattingShift = delta;
+        } else if (effectiveAlign == ui.TextAlign.center) {
+          line.formattingShift = delta / 2;
+        }
       }
-      // We do nothing for left align
-      if (effectiveAlign == ui.TextAlign.justify) {
-        // TODO(jlavrova): implement justify
-      } else if (effectiveAlign == ui.TextAlign.right) {
-        line.formattingShift = delta;
-      } else if (effectiveAlign == ui.TextAlign.center) {
-        line.formattingShift = delta / 2;
-      }
-      paragraph.longestLine = math.max(
-        paragraph.longestLine,
-        line.advance.width + line.formattingShift,
-      );
-      paragraph.width = paragraph.longestLine;
-      paragraph.height += line.advance.height;
-      WebParagraphDebug.log(
-        'formatLines($width): ${line.advance} $effectiveAlign $delta ${line.formattingShift} ${paragraph.longestLine}',
+      WebParagraphDebug.apiTrace(
+        'formatLines(${paragraph.text}, $width): ${line.advance} $effectiveAlign $delta ${line.formattingShift} ${paragraph.longestLine}',
       );
     }
   }
@@ -582,11 +635,12 @@ class TextLayout {
   ) {
     final TextRange textRange = TextRange(start: start, end: end);
     final List<ui.TextBox> result = <ui.TextBox>[];
-    for (final line in lines) {
+    for (int lineIndex = 0; lineIndex < lines.length; ++lineIndex) {
+      final line = lines[lineIndex];
+      lineIndex += 1;
       WebParagraphDebug.log(
         'Line: ${line.textClusterRange} & $textRange '
-        '[${line.advance.left}:${line.advance.right} x ${line.advance.top}:${line.advance.bottom} '
-        '${line.fontBoundingBoxAscent}+${line.fontBoundingBoxDescent}',
+        '[${line.advance.left}:${line.advance.right} x ${line.advance.top}:${line.advance.bottom}] ',
       );
       // We take whitespaces in account
       final TextRange lineTextRange = convertSequentialClusterRangeToText(
@@ -598,6 +652,7 @@ class TextLayout {
       if (end <= lineTextRange.start || start > lineTextRange.end) {
         continue;
       }
+
       for (final LineBlock block in line.visualBlocks) {
         final intersect = TextRange.intersectTextRange(block.textRange, textRange);
         WebParagraphDebug.log(
@@ -607,21 +662,24 @@ class TextLayout {
         if (intersect.size <= 0) {
           continue;
         }
-        /*
+
+        // We are dealing with single bidi, single line, single style range
         final rects = block.getSelectionRects(intersect);
-        assert(
-          rects.length == 1,
-        ); // We are dealing with single bidi, single line, single style range
-        final firstRect = ui.Rect.fromLTWH(
-          rects.first.left,
-          rects.first.top,
-          rects.first.width,
-          rects.first.height,)
-          */
-        final firstRect = block.correctedAdvance.translate(
-          block.clusterShiftInLine,
-          block is LinePlaceholdeBlock ? 0 : block.rawFontBoundingBoxAscent,
-        ); // block.advance.top == 0
+        assert(rects.length == 1);
+
+        final firstRect =
+            ui.Rect.fromLTWH(
+              rects.first.left,
+              rects.first.top,
+              rects.first.width,
+              rects.first.height,
+            ).translate(
+              block.clusterShiftInLine,
+              block is LinePlaceholdeBlock
+                  ? /*block.advance.top=*/ 0
+                  : block.rawFontBoundingBoxAscent,
+            );
+
         WebParagraphDebug.log(
           'getSelectionRects(${intersect.start},${intersect.end}): '
           'shifted (${block.clusterShiftInLine}, ${block.rawFontBoundingBoxAscent}) '
@@ -643,8 +701,14 @@ class TextLayout {
             bottom = firstRect.top + line.advance.bottom;
             assert((line.advance.height - (bottom - top).abs() < epsilon));
           case ui.BoxHeightStyle.strut:
-            // TODO(jlavrova): implement strut
-            throw UnimplementedError('BoxHeightStyle.strut not implemented');
+            if (paragraph.paragraphStyle.strutStyle == null) {
+              top = firstRect.top;
+              bottom = firstRect.bottom;
+              break;
+            }
+            final WebStrutStyle? strutStyle = paragraph.paragraphStyle.strutStyle as WebStrutStyle?;
+            top = line.fontBoundingBoxAscent - strutStyle!.strutAscent;
+            bottom = top + strutStyle.strutDescent;
           case ui.BoxHeightStyle.includeLineSpacingMiddle:
             top =
                 line.advance.top +
@@ -664,10 +728,6 @@ class TextLayout {
         left = firstRect.left - (line.advance.left + line.formattingShift);
         right = left + firstRect.width;
         WebParagraphDebug.log('getSelectionRects: $left:$right x $top:$bottom');
-        WebParagraphDebug.log(
-          'shift: -x=${line.advance.left + line.formattingShift}='
-          '${line.advance.left}+${line.formattingShift} +y=${line.advance.top + line.fontBoundingBoxAscent}',
-        );
         result.add(
           ui.TextBox.fromLTRBD(
             left,
@@ -679,26 +739,27 @@ class TextLayout {
         );
       }
 
-      if (boxWidthStyle == ui.BoxWidthStyle.max && paragraph.requiredWidth != double.infinity) {
+      if (boxWidthStyle == ui.BoxWidthStyle.max && lineIndex < lines.length) {
+        // Add whitespaces box left/right
         if ((result.first.left - 0).abs() > epsilon) {
           result.insert(
             0,
             ui.TextBox.fromLTRBD(
               0,
               result.first.top,
-              result.first.right,
+              result.last.left,
               result.first.bottom,
               paragraph.paragraphStyle.textDirection,
             ),
           );
         }
-        if ((result.last.right - paragraph.requiredWidth).abs() > epsilon) {
+        if ((result.last.right - paragraph.longestLine).abs() > epsilon) {
           result.add(
             ui.TextBox.fromLTRBD(
               result.last.right,
-              result.last.top,
-              paragraph.requiredWidth,
-              result.last.bottom,
+              result.first.top,
+              paragraph.longestLine,
+              result.first.bottom,
               paragraph.paragraphStyle.textDirection,
             ),
           );
@@ -744,7 +805,14 @@ class TextLayout {
   }
 
   ui.TextPosition getPositionForOffset(ui.Offset offset) {
-    WebParagraphDebug.log('getPositionForOffset($offset)');
+    WebParagraphDebug.apiTrace('getPositionForOffset("${paragraph.text}", $offset)');
+
+    if (paragraph.text.isEmpty) {
+      return ui.TextPosition(
+        offset: 0,
+        affinity: offset.dx <= 0 ? ui.TextAffinity.upstream : ui.TextAffinity.downstream,
+      );
+    }
 
     int lineNum = 0;
     for (final line in lines) {
@@ -792,7 +860,10 @@ class TextLayout {
             ? block.clusterRange.end
             : block.clusterRange.start - 1;
         final int step = block.bidiLevel.isEven ? 1 : -1;
-        WebParagraphDebug.log('Found block: ${block.clusterRange}');
+        if (paragraph.text == 'Flutter gallery') {
+          // Special case to help debug
+          WebParagraphDebug.apiTrace('Found block: ${block.clusterRange}');
+        }
         for (int i = start; i != end; i += step) {
           final cluster = textClusters[i];
           final ui.Rect rect = cluster.advance
@@ -801,7 +872,6 @@ class TextLayout {
                 line.advance.top + line.fontBoundingBoxAscent,
               )
               .inflate(epsilon);
-          WebParagraphDebug.log('Check cluster: $rect $offset');
           if (rect.contains(offset)) {
             // TODO(jlavrova): proportionally calculate the text position? I wouldn't...
             if (offset.dx - rect.left <= rect.right - offset.dx) {
@@ -809,9 +879,14 @@ class TextLayout {
                 offset: cluster.textRange.start,
                 /* affinity: ui.TextAffinity.downstream, */
               );
-            } else {
+            } else if (cluster.textRange.end == paragraph.text.length) {
               return ui.TextPosition(
                 offset: cluster.textRange.end - 1,
+                /* affinity: ui.TextAffinity.downstream, */
+              );
+            } else {
+              return ui.TextPosition(
+                offset: cluster.textRange.end,
                 affinity: ui.TextAffinity.upstream,
               );
             }
@@ -824,15 +899,67 @@ class TextLayout {
       // We didn't find the block containing our offset and
       // we didn't find the block that is on the right of the offset
       // So all the blocks are on the left
-      return ui.TextPosition(
-        offset: line.textClusterRange.end - 1,
-        /*affinity: ui.TextAffinity.downstream,*/
-      );
+      return paragraph.text.isEmpty
+          ? const ui.TextPosition(offset: 0)
+          : ui.TextPosition(
+              offset: line.textClusterRange.end - 1,
+              /*affinity: ui.TextAffinity.downstream,*/
+            );
     }
     // We didn't find the line containing our offset and
     // we didn't find the line that is down from the offset
     // So all the line are above the offset
-    return ui.TextPosition(offset: paragraph.text.length - 1, affinity: ui.TextAffinity.upstream);
+    return paragraph.text.isEmpty
+        ? const ui.TextPosition(offset: 0)
+        : ui.TextPosition(offset: paragraph.text.length, affinity: ui.TextAffinity.upstream);
+  }
+
+  ui.GlyphInfo? getGlyphInfoAt(int codeUnitOffset) {
+    if (paragraph.text.isEmpty || codeUnitOffset < 0 || codeUnitOffset >= paragraph.text.length) {
+      return null;
+    }
+
+    final clusterRange = convertTextToClusterRange(
+      TextRange(start: codeUnitOffset, end: codeUnitOffset + 1),
+    );
+
+    for (final line in lines) {
+      if (line.allLineTextRange.start > codeUnitOffset) {
+        // No more lines can contain the cluster
+        break;
+      } else if (line.allLineTextRange.end <= codeUnitOffset) {
+        // The cluster is not on this line
+        continue;
+      }
+      // The cluster is on this line
+      for (final visualBlock in line.visualBlocks) {
+        if (visualBlock.clusterRange.start > clusterRange.start) {
+          // No more visual blocks can contain the cluster
+          continue;
+        } else if (visualBlock.clusterRange.end <= clusterRange.start) {
+          // The cluster is not in this visual block
+          continue;
+        }
+        // The cluster is in this visual block
+        for (int i = visualBlock.clusterRange.start; i < visualBlock.clusterRange.end; i++) {
+          if (i < clusterRange.start) {
+            continue;
+          } else if (i >= clusterRange.end) {
+            break;
+          }
+          final cluster = textClusters[i];
+          return ui.GlyphInfo(
+            cluster.advance.translate(
+              line.advance.left + line.formattingShift + visualBlock.clusterShiftInLine,
+              line.advance.top + line.fontBoundingBoxAscent,
+            ),
+            ui.TextRange(start: cluster.textRange.start, end: cluster.textRange.end),
+            detectTextDirection(clusterRange),
+          );
+        }
+      }
+    }
+    return null;
   }
 
   ui.TextRange getWordBoundary(int position) {
@@ -851,6 +978,16 @@ class TextLayout {
       end += 1;
     }
     return ui.TextRange(start: start, end: end);
+  }
+
+  ui.TextRange getLineBoundary(int codepointPosition) {
+    for (final line in lines) {
+      if (line.allLineTextRange.start <= codepointPosition &&
+          line.allLineTextRange.end > codepointPosition) {
+        return ui.TextRange(start: line.allLineTextRange.start, end: line.allLineTextRange.end);
+      }
+    }
+    return ui.TextRange.empty;
   }
 }
 
@@ -891,16 +1028,20 @@ class ExtendedTextCluster {
       shift = lastCluster.shift,
       placeholder = false;
 
-  ExtendedTextCluster.empty()
-    : shift = 0.0,
-      fontBoundingBoxAscent = 0.0,
-      fontBoundingBoxDescent = 0.0,
+  ExtendedTextCluster.empty(DomTextMetrics? textMetrics, WebTextStyle this.textStyle)
+    : cluster = null,
+      shift = 0.0,
+      fontBoundingBoxAscent = textMetrics?.fontBoundingBoxAscent ?? 0.0,
+      fontBoundingBoxDescent = textMetrics?.fontBoundingBoxDescent ?? 0.0,
+      textRange = TextRange(start: 0, end: 0),
       bounds = ui.Rect.zero,
       advance = ui.Rect.zero,
-      textRange = TextRange(start: 0, end: 0),
       start = 0,
       end = 0,
-      placeholder = false;
+      placeholder = false {
+    bounds = ui.Rect.fromLTWH(0, 0, 0, fontBoundingBoxAscent + fontBoundingBoxDescent);
+    advance = ui.Rect.fromLTWH(0, 0, 0, fontBoundingBoxAscent + fontBoundingBoxDescent);
+  }
 
   double absolutePositionX() {
     return /*style block shift*/ shift + /*cluster advance inside the style block*/ advance.left;

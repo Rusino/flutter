@@ -40,7 +40,7 @@ Future<void> testMain() async {
     final WebParagraph paragraph = builder.build();
     expect(paragraph.text, '');
     expect(paragraph.paragraphStyle, paragraphStyle);
-    expect(paragraph.styledTextRanges.length, 0);
+    expect(paragraph.styledTextRanges.length, 1);
   });
 
   test('Build paragraph with some text but without a style', () {
@@ -66,7 +66,7 @@ Future<void> testMain() async {
     final WebParagraph paragraph = builder.build();
     expect(paragraph.text, '');
     expect(paragraph.paragraphStyle, paragraphStyle);
-    expect(paragraph.styledTextRanges.length, 0);
+    expect(paragraph.styledTextRanges.length, 1);
   });
 
   test('Build paragraph with a few styles at the and without any text', () {
