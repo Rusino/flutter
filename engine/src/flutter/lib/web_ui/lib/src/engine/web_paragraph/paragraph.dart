@@ -11,11 +11,13 @@ import '../dom.dart';
 import '../text/paragraph.dart';
 import '../util.dart';
 import '../view_embedder/style_manager.dart';
+import 'cache.dart';
 import 'debug.dart';
 import 'layout.dart';
 import 'paint.dart';
 import 'paint_paragraph.dart';
 import 'painter.dart';
+import 'reference_counted.dart';
 
 @visibleForTesting
 const String kPlaceholderChar = '\uFFFC';
@@ -26,6 +28,8 @@ final DomCanvasRenderingContext2D layoutContext =
     // We don't use this canvas to draw anything, so let's make it as small as
     // possible to save memory.
     createDomCanvasElement(width: 0, height: 0).context2D;
+
+final SmartParagraphCache cache = SmartParagraphCache();
 
 /// The web implementation of  [ui.ParagraphStyle]
 @immutable
@@ -287,8 +291,8 @@ class WebTextStyle implements ui.TextStyle {
         other.fontStyle == fontStyle &&
         other.fontWeight == fontWeight &&
         other.color == color &&
-        paintEquals(other.foreground, foreground) &&
-        paintEquals(other.background, background) &&
+        paintCompare(other.foreground, foreground) &&
+        paintCompare(other.background, background) &&
         listEquals<ui.Shadow>(other.shadows, shadows) &&
         other.decoration == decoration &&
         other.decorationColor == decorationColor &&
@@ -317,8 +321,8 @@ class WebTextStyle implements ui.TextStyle {
       fontStyle,
       fontWeight,
       color,
-      foreground,
-      background,
+      paintHashCode(foreground),
+      paintHashCode(background),
       shadows == null ? null : Object.hashAll(shadows),
       decoration,
       decorationColor,
@@ -335,6 +339,39 @@ class WebTextStyle implements ui.TextStyle {
         fontFeatures == null ? null : Object.hashAll(fontFeatures),
         fontVariations == null ? null : Object.hashAll(fontVariations),
       ),
+    );
+  }
+
+  bool paintCompare(ui.Paint? paint1, ui.Paint? paint2) {
+    if (paint1 == null && paint2 == null) {
+      return true;
+    } else if (paint1 == null || paint2 == null) {
+      return false;
+    }
+    return paint1.color == paint2.color &&
+        paint1.style == paint2.style &&
+        paint1.strokeWidth == paint2.strokeWidth &&
+        paint1.strokeCap == paint2.strokeCap &&
+        paint1.strokeJoin == paint2.strokeJoin &&
+        paint1.blendMode == paint2.blendMode &&
+        paint1.colorFilter == paint2.colorFilter;
+    // TODO(jlavrova): Shaders/Filters use memory identity!
+  }
+
+  int paintHashCode(ui.Paint? paint) {
+    if (paint == null) {
+      return null.hashCode;
+    }
+
+    return Object.hash(
+      paint.color,
+      paint.style,
+      paint.strokeWidth,
+      paint.strokeCap,
+      paint.strokeJoin,
+      paint.blendMode,
+      paint.colorFilter,
+      // TODO(jlavrova): Shaders/Filters use memory identity!
     );
   }
 
@@ -565,6 +602,20 @@ abstract class ParagraphSpan extends ui.TextRange {
   double get fontBoundingBoxDescent;
 
   List<WebCluster> extractClusters();
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ParagraphSpan &&
+        other.start == start &&
+        other.end == end &&
+        other.style == style;
+  }
+
+  @override
+  int get hashCode => Object.hash(start, end, style);
 }
 
 class PlaceholderSpan extends ParagraphSpan {
@@ -613,7 +664,8 @@ class PlaceholderSpan extends ParagraphSpan {
   }
 
   @override
-  int get hashCode => Object.hash(start, end, style, width, height, alignment, baseline);
+  int get hashCode =>
+      Object.hash(start, end, style, width, height, alignment, baseline, baselineOffset);
 }
 
 class TextSpan extends ParagraphSpan {
@@ -718,7 +770,7 @@ class TextSpan extends ParagraphSpan {
 
   @override
   String toString() {
-    return 'TextSpan($start, $end, "$text", $style)';
+    return 'TextSpan($start, $end, "$text", $StyleManager(), $textDirection)';
   }
 
   @override
@@ -727,14 +779,13 @@ class TextSpan extends ParagraphSpan {
       return true;
     }
     return other is TextSpan &&
-        other.start == start &&
-        other.end == end &&
-        other.style == style &&
-        other.text == text;
+        super == other &&
+        other.text == text &&
+        other.textDirection == textDirection;
   }
 
   @override
-  int get hashCode => Object.hash(start, end, style, text);
+  int get hashCode => Object.hash(super.hashCode, text, textDirection);
 }
 
 class WebStrutStyle implements ui.StrutStyle {
@@ -839,12 +890,55 @@ class WebStrutStyle implements ui.StrutStyle {
 /// An implementation of [ui.Paragraph] based on the new Enhanced TextMetrics API.
 ///
 /// See: https://chromestatus.com/feature/5075532483657728
-class WebParagraph implements ui.Paragraph {
-  WebParagraph(this.paragraphStyle, this.spans, this.text);
+class WebParagraph with ReferenceCounted implements ui.Paragraph {
+  WebParagraph(
+    this.paragraphStyle,
+    this.spans,
+    this.text, {
+    TextLayout? layout,
+    CanvasKitPainter? painter,
+    TextPaint? paint,
+  }) {
+    _layout = layout ?? TextLayout(this);
+    _paint = paint ?? PaintParagraph(this);
+    _painter = painter ?? CanvasKitPainter();
+  }
+
+  late final CanvasKitPainter _painter;
+  late final TextLayout _layout;
+  late final TextPaint _paint;
 
   final WebParagraphStyle paragraphStyle;
   final List<ParagraphSpan> spans;
   final String text;
+
+  bool _disposed = false;
+  @override
+  void dispose() {
+    assert(!_disposed, 'Paragraph has been disposed.');
+    _disposed = true;
+    release();
+  }
+
+  @override
+  void disposeInternal() {
+    _painter.dispose();
+  }
+
+  @override
+  bool get debugDisposed {
+    bool? result;
+    assert(() {
+      result = _disposed;
+      return true;
+    }());
+
+    if (result != null) {
+      return result!;
+    }
+
+    throw StateError('Paragraph.debugDisposed is only available when asserts are enabled.');
+  }
 
   @override
   double alphabeticBaseline = 0;
@@ -960,6 +1054,7 @@ class WebParagraph implements ui.Paragraph {
   @override
   void layout(ui.ParagraphConstraints constraints) {
     _layout.performLayout(constraints.width);
+
     WebParagraphDebug.apiTrace(
       'layout("$text", ${constraints.width.toStringAsFixed(4)}}): '
       'width=${width.toStringAsFixed(4)} height=${height.toStringAsFixed(4)} '
@@ -1043,29 +1138,6 @@ class WebParagraph implements ui.Paragraph {
     return null;
   }
 
-  bool _disposed = false;
-
-  @override
-  void dispose() {
-    assert(!_disposed, 'Paragraph has been disposed.');
-    _disposed = true;
-  }
-
-  @override
-  bool get debugDisposed {
-    bool? result;
-    assert(() {
-      result = _disposed;
-      return true;
-    }());
-
-    if (result != null) {
-      return result!;
-    }
-
-    throw StateError('Paragraph.debugDisposed is only available when asserts are enabled.');
-  }
-
   TextLayout getLayout() {
     return _layout;
   }
@@ -1078,10 +1150,6 @@ class WebParagraph implements ui.Paragraph {
     assert(end <= text.length);
     return text.substring(start, end);
   }
-
-  late final TextLayout _layout = TextLayout(this);
-  late final TextPaint _paint = PaintParagraph(this);
-  late final Painter _painter = CanvasKitPainter();
 }
 
 class WebLineMetrics implements ui.LineMetrics {
@@ -1287,14 +1355,20 @@ class WebParagraphBuilder implements ui.ParagraphBuilder {
     _closeTextSpan();
     final text = _fullTextBuffer.toString();
 
-    final paragraph = WebParagraph(_paragraphStyle, _spans, text);
+    final key = ParagraphKey(text: text, paragraphStyle: _paragraphStyle, textSpans: _spans);
+    WebParagraph? cached = cache.get(key);
+    if (cached == null) {
+      cached = WebParagraph(_paragraphStyle, _spans, text);
+      cache.add(key, cached);
+    }
+
     if (WebParagraphDebug.apiLogging) {
       WebParagraphDebug.apiTrace('WebParagraphBuilder.build(): "$text" ${_spans.length}');
       for (var i = 0; i < _spans.length; ++i) {
         WebParagraphDebug.log('$i: ${_spans[i]}');
       }
     }
-    return paragraph;
+    return cached;
   }
 
   @override

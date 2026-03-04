@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:ui/ui.dart' as ui;
 
+import '../../engine.dart';
 import '../canvaskit/canvaskit_api.dart';
 import '../canvaskit/image.dart';
 import '../dom.dart';
@@ -73,6 +74,8 @@ abstract class Painter {
       );
     }
   }
+
+  void dispose();
 }
 
 class CanvasKitPainter extends Painter {
@@ -83,6 +86,9 @@ class CanvasKitPainter extends Painter {
 
   @override
   void drawBackground(ui.Canvas canvas, LineBlock block, ui.Rect sourceRect, ui.Rect targetRect) {
+    if (block.style.background == null || block.style.background!.color.opacity == 0) {
+      return;
+    }
     // We need to snap the block edges because Skia draws rectangles with subpixel accuracy
     // and we end up with overlaps (this is only a problem when colors have transparency)
     // or gaps between blocks (which looks unacceptable - vertical lines between blocks).
@@ -161,6 +167,11 @@ class CanvasKitPainter extends Painter {
       targetRect,
       ui.Paint()..filterQuality = ui.FilterQuality.none,
     );
+  }
+
+  @override
+  void dispose() {
+    resetCache();
   }
 
   @override
