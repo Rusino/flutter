@@ -99,6 +99,7 @@ class SmartParagraphCache {
     }
 
     _cache[key] = paragraph;
+    _cache[key]!.retain(); // Cache retains the paragraph, so refCount = 2 (1 for Cache, 1 for You)
     _currentUsage += newSize;
   }
 
@@ -112,7 +113,6 @@ class SmartParagraphCache {
   }
 
   void clear() {
-    print('Clearing cache');
     for (final WebParagraph p in _cache.values) {
       p.dispose();
     }

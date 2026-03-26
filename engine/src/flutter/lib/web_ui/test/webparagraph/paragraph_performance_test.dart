@@ -80,7 +80,7 @@ Future<void> testMain() async {
       await draw('dummyText', 'Dummy text', 'Dummy text', 1, 1);
     },
     timeout: Timeout.none,
-    skip: true,
+    skip: false,
   );
 
   test(
@@ -89,7 +89,7 @@ Future<void> testMain() async {
       await draw('smallText', 'Abcdef', 'Small text', 10, 100);
     },
     timeout: Timeout.none,
-    skip: true,
+    skip: false,
   );
 
   test(
@@ -98,7 +98,7 @@ Future<void> testMain() async {
       await draw('mediumText', 'Abcdef ghijkl mnopqrs tuvwxyz.', 'Medium text', 10, 100);
     },
     timeout: Timeout.none,
-    skip: true,
+    skip: false,
   );
 
   test(
@@ -136,7 +136,7 @@ Future<void> testMain() async {
       );
     },
     timeout: Timeout.none,
-    skip: true,
+    skip: false,
   );
 
   test(

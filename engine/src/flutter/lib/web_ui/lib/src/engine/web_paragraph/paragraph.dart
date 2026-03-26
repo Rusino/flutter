@@ -19,6 +19,8 @@ import 'paint_paragraph.dart';
 import 'painter.dart';
 import 'reference_counted.dart';
 
+import '../../engine.dart';
+
 @visibleForTesting
 const String kPlaceholderChar = '\uFFFC';
 
@@ -891,33 +893,31 @@ class WebStrutStyle implements ui.StrutStyle {
 ///
 /// See: https://chromestatus.com/feature/5075532483657728
 class WebParagraph with ReferenceCounted implements ui.Paragraph {
-  WebParagraph(
-    this.paragraphStyle,
-    this.spans,
-    this.text, {
-    TextLayout? layout,
-    CanvasKitPainter? painter,
-    TextPaint? paint,
-  }) {
+  WebParagraph(this.paragraphStyle, this.spans, this.text) {
+    setup();
+  }
+
+  void setup({TextLayout? layout, TextPaint? paint, CanvasKitPainter? painter}) {
     _layout = layout ?? TextLayout(this);
     _paint = paint ?? PaintParagraph(this);
     _painter = painter ?? CanvasKitPainter();
   }
 
-  late final CanvasKitPainter _painter;
-  late final TextLayout _layout;
-  late final TextPaint _paint;
+  late CanvasKitPainter _painter;
+  late TextLayout _layout;
+  late TextPaint _paint;
 
   final WebParagraphStyle paragraphStyle;
   final List<ParagraphSpan> spans;
   final String text;
 
-  bool _disposed = false;
+  bool get hasSingleImageCache => _painter.hasSingleImageCache;
+  CanvasKitPainter get painter => _painter;
+
   @override
   void dispose() {
-    assert(!_disposed, 'Paragraph has been disposed.');
-    _disposed = true;
-    release();
+    _painter.release();
+    super.release();
   }
 
   @override
@@ -926,16 +926,16 @@ class WebParagraph with ReferenceCounted implements ui.Paragraph {
   }
 
   @override
-  bool get debugDisposed {
-    bool? result;
-    assert(() {
-      result = _disposed;
-      return true;
-    }());
+  void retain() {
+    super.retain();
+    _painter.retain();
+  }
 
-    if (result != null) {
-      return result!;
-    }
+  @override
+  bool get debugDisposed {
+    assert(() {
+      return refCount == 0;
+    }());
 
     throw StateError('Paragraph.debugDisposed is only available when asserts are enabled.');
   }
@@ -1350,6 +1350,14 @@ class WebParagraphBuilder implements ui.ParagraphBuilder {
     _spanTextBuffer = StringBuffer();
   }
 
+  WebParagraph produceParagraph(
+    WebParagraphStyle paragraphStyle,
+    List<ParagraphSpan> spans,
+    String text,
+  ) {
+    return WebParagraph(_paragraphStyle, _spans, text);
+  }
+
   @override
   WebParagraph build() {
     _closeTextSpan();
@@ -1358,7 +1366,7 @@ class WebParagraphBuilder implements ui.ParagraphBuilder {
     final key = ParagraphKey(text: text, paragraphStyle: _paragraphStyle, textSpans: _spans);
     WebParagraph? cached = cache.get(key);
     if (cached == null) {
-      cached = WebParagraph(_paragraphStyle, _spans, text);
+      cached = produceParagraph(_paragraphStyle, _spans, text);
       cache.add(key, cached);
     }
 

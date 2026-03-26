@@ -78,7 +78,7 @@ abstract class Painter {
   void dispose();
 }
 
-class CanvasKitPainter extends Painter {
+class CanvasKitPainter extends Painter with ReferenceCounted {
   CkImage? _singleImageCache;
 
   @override
@@ -186,4 +186,7 @@ class CanvasKitPainter extends Painter {
   bool hasCache() {
     return _singleImageCache != null;
   }
+
+  @override
+  void disposeInternal() {}
 }

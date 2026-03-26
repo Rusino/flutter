@@ -11,7 +11,6 @@ mixin ReferenceCounted {
       throw StateError('Cannot retain a disposed object.');
     }
     _refCount++;
-    //print('retain $_refCount');
   }
 
   /// Call this when you are done with the object.
@@ -22,10 +21,8 @@ mixin ReferenceCounted {
     }
 
     _refCount--;
-    //print('release $_refCount');
 
     if (_refCount == 0) {
-      //print('disposeInternal');
       disposeInternal();
     }
   }
@@ -36,4 +33,6 @@ mixin ReferenceCounted {
   void disposeInternal();
 
   bool get isAlive => _refCount > 0;
+
+  int get refCount => _refCount;
 }

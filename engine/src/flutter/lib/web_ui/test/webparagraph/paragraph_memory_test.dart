@@ -11,6 +11,9 @@ import 'package:web_engine_tester/golden_tester.dart';
 import '../common/test_initialization.dart';
 import '../ui/utils.dart';
 
+const int count = 10;
+const int perf_count = 1000;
+
 void main() {
   internalBootstrapBrowserTest(() => testMain);
 }
@@ -29,63 +32,50 @@ Future<R> timeActionAsync<R>(String name, AsyncAction<R> action) async {
   }
 }
 
-/*
-class MockPainter implements CanvasKitPainter {
-  bool isDisposed = false;
+class MockPainter extends CanvasKitPainter {}
 
-  @override
-  void dispose() {
-    isDisposed = true;
-  }
-
-  // Stubs for other methods to satisfy the interface
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+class MockLayout extends TextLayout {
+  MockLayout(super.paragraph);
 }
 
-class MockLayout implements TextLayout {
-  // Stubs
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class MockPaint implements TextPaint {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+class MockPaint extends PaintParagraph {
+  MockPaint(super.paragraph);
 }
 
 class MockWebParagraph extends WebParagraph {
-  // We expose these purely so your tests can inspect them later
-  // (e.g., expect(paragraph.injectedLayout.wasCalled, isTrue))
-  final TextLayout injectedLayout;
-  final CanvasKitPainter injectedPainter;
-  final TextPaint injectedTextPaint;
+  MockWebParagraph(super.paragraphStyle, super.spans, super.text) {
+    setup();
+  }
 
-  // We pass the substituted members directly to the real superclass.
-  MockWebParagraph._(this.injectedLayout, this.injectedPainter, this.injectedTextPaint)
-    : super(injectedLayout, injectedPainter, injectedTextPaint);
-
-  // A convenient factory to build it for your tests
-  factory MockWebParagraph.create({
-    TextLayout? layout,
-    CanvasKitPainter? painter,
-    TextPaint? paint,
-  }) {
-    // If you don't provide substitutes, we can even provide real ones or spies
-    final TextPaint substitutedPaint = paint ?? MockPaint();
-    final CanvasKitPainter substitutedPainter = painter ?? MockPainter();
-    final TextLayout substitutedLayout = layout ?? MockLayout();
-
-    return MockWebParagraph._(substitutedLayout, substitutedPainter, substitutedPaint);
+  @override
+  void setup({TextLayout? layout, TextPaint? paint, CanvasKitPainter? painter}) {
+    super.setup(
+      layout: layout ?? MockLayout(this),
+      paint: paint ?? MockPaint(this),
+      painter: painter ?? MockPainter(),
+    );
   }
 }
-*/
+
+class MockWebParagraphBuilder extends WebParagraphBuilder {
+  MockWebParagraphBuilder(ParagraphStyle paragraphStyle) : super(paragraphStyle);
+
+  @override
+  WebParagraph produceParagraph(
+    WebParagraphStyle paragraphStyle,
+    List<ParagraphSpan> spans,
+    String text,
+  ) {
+    return MockWebParagraph(paragraphStyle, spans, text);
+  }
+}
+
 Future<void> testMain() async {
   WebParagraphProfiler.register();
   setUpUnitTests(withImplicitView: true, setUpTestViewDimensions: false);
 
   test(
-    'Make sure the paragraph layout/paint reuse the cached results after the first layout/paint',
+    'Make sure the paragraph layout/paint cache and reuse the cached results',
     () async {
       WebParagraphProfiler.reset();
       final recorder = PictureRecorder();
@@ -96,48 +86,12 @@ Future<void> testMain() async {
       const text1 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
       const text2 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-      {
-        // Dummy layout to get Chrome and GPU up and running
-        final builder = ParagraphBuilder(arialStyle);
-        builder.pushStyle(textStyle);
-        builder.addText('Hello World');
-        final Paragraph paragraph = builder.build();
-        paragraph.layout(const ParagraphConstraints(width: 1000));
-        final canvas = Canvas(recorder, region);
-        canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
-        for (var i = 0; i < 100; i++) {
-          canvas.drawParagraph(paragraph, const Offset(20, 20));
-        }
-        await drawPictureUsingCurrentRenderer(recorder.endRecording());
-      }
-
-      {
-        // Layout/paint the same paragraph multiple times to see the effect of caching
-        for (var i = 0; i < 1000; i++) {
-          final builder = ParagraphBuilder(arialStyle);
-          builder.pushStyle(textStyle);
-          builder.addText('abc000$text1');
-          final Paragraph paragraph = builder.build();
-          timeAction(i == 0 ? 'cache_layout_first' : 'cache_layout', () {
-            paragraph.layout(const ParagraphConstraints(width: 1000));
-          });
-          final canvas = Canvas(recorder, region);
-          canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
-          await timeActionAsync(i == 0 ? 'cache_paint_first' : 'cache_paint', () async {
-            canvas.drawParagraph(paragraph, const Offset(20, 20));
-            await drawPictureUsingCurrentRenderer(
-              recorder.endRecording(),
-            ); // This is a hack to make sure the canvas is flushed
-          });
-        }
-      }
-
-      // Layout/paint different paragraphs to see the effect of no caching
-      for (var i = 0; i < 1000; i++) {
-        final builder = ParagraphBuilder(arialStyle);
+      // Layout/paint different paragraphs to see that they are cached
+      for (var i = 0; i < count; i++) {
+        final builder = MockWebParagraphBuilder(arialStyle);
         builder.pushStyle(textStyle);
         builder.addText("ABC${(i + 1).toString().padLeft(3, '0')}$text2");
-        final Paragraph paragraph = builder.build();
+        final paragraph = builder.build() as MockWebParagraph;
 
         timeAction(i == 0 ? 'nocache_layout_first' : 'nocache_layout', () {
           paragraph.layout(const ParagraphConstraints(width: 1000));
@@ -150,9 +104,219 @@ Future<void> testMain() async {
             recorder.endRecording(),
           ); // This is a hack to make sure the canvas is flushed
         });
+        if (paragraph.refCount != 2) {
+          throw Exception(
+            'Expected refCount == 2 for the paragraph, but got ${paragraph.refCount}',
+          );
+        }
+        if (paragraph.painter.refCount != 2) {
+          throw Exception(
+            'Expected refCount == 2 for the painter (image cache), but got ${paragraph.painter.refCount}',
+          );
+        }
+      }
+      if (cache.size != count) {
+        throw Exception('Expected $count paragraphs in cache, but got ${cache.size}');
       }
 
-      await matchGoldenFile('cached_paragraph.png', region: region);
+      {
+        // Layout/paint the same paragraph multiple times to see the effect of caching
+        for (var i = 0; i < count; i++) {
+          final builder = MockWebParagraphBuilder(arialStyle);
+          builder.pushStyle(textStyle);
+          builder.addText('abc000$text1');
+          final paragraph = builder.build() as MockWebParagraph;
+          timeAction(i == 0 ? 'cache_layout_first' : 'cache_layout', () {
+            paragraph.layout(const ParagraphConstraints(width: 1000));
+          });
+          final canvas = Canvas(recorder, region);
+          canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
+          await timeActionAsync(i == 0 ? 'cache_paint_first' : 'cache_paint', () async {
+            canvas.drawParagraph(paragraph, const Offset(20, 20));
+            await drawPictureUsingCurrentRenderer(
+              recorder.endRecording(),
+            ); // This is a hack to make sure the canvas is flushed
+          });
+          // We dispose of the paragraph here but it will remain alive in cache.
+          // This is to make sure that the cache is working and not creating new paragraphs.
+          paragraph.dispose();
+          if (paragraph.refCount != 1) {
+            throw Exception(
+              'Expected refCount == 1 for the paragraph, but got ${paragraph.refCount}',
+            );
+          }
+          if (paragraph.painter.refCount != 1) {
+            throw Exception(
+              'Expected refCount == 1 for the painter (image cache), but got ${paragraph.painter.refCount}',
+            );
+          }
+        }
+      }
+      if (cache.size != count + 1) {
+        throw Exception('01 Expected ${count + 1} paragraphs in cache, but got ${cache.size}');
+      }
+
+      cache.clear();
+      if (cache.size != 0) {
+        throw Exception('04 Expected 0 paragraphs in cache, but got ${cache.size}');
+      }
+
+      await matchGoldenFile('cached_paragraph_functionality.png', region: region);
+
+      WebParagraphProfiler.log();
+    },
+    timeout: Timeout.none,
+    solo: false,
+  );
+
+  test(
+    'Measure performance of caching paragraph layout/paint',
+    () async {
+      WebParagraphProfiler.reset();
+      final recorder = PictureRecorder();
+      const region = Rect.fromLTWH(0, 0, 1000, 1000);
+
+      final arialStyle = ParagraphStyle(fontFamily: 'Roboto', fontSize: 20);
+      final textStyle = TextStyle(color: const Color(0xFF000000), fontSize: 20);
+      const text1 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+      const text2 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+      // Layout/paint different paragraphs so they are cached
+      for (var i = 0; i < perf_count; i++) {
+        final builder = MockWebParagraphBuilder(arialStyle);
+        builder.pushStyle(textStyle);
+        builder.addText("ABC${(i + 1).toString().padLeft(3, '0')}$text2");
+        final paragraph = builder.build() as MockWebParagraph;
+
+        timeAction('layout', () {
+          paragraph.layout(const ParagraphConstraints(width: 1000));
+        });
+        final canvas = Canvas(recorder, region);
+        canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
+        await timeActionAsync('paint', () async {
+          canvas.drawParagraph(paragraph, const Offset(20, 20));
+          await drawPictureUsingCurrentRenderer(
+            recorder.endRecording(),
+          ); // This is a hack to make sure the canvas is flushed
+        });
+      }
+
+      await timeActionAsync('cache_clear', () async {
+        cache.clear();
+      });
+      await matchGoldenFile('caching_paragraph_performance.png', region: region);
+
+      WebParagraphProfiler.log();
+    },
+    timeout: Timeout.none,
+    solo: false,
+  );
+
+  test(
+    'Measure performance of paragraph layout/paint with and without cache',
+    () async {
+      WebParagraphProfiler.reset();
+      final recorder = PictureRecorder();
+      const region = Rect.fromLTWH(0, 0, 1000, 1000);
+
+      final arialStyle = ParagraphStyle(fontFamily: 'Roboto', fontSize: 20);
+      final textStyle = TextStyle(color: const Color(0xFF000000), fontSize: 20);
+      const text1 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+      const text2 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+      {
+        // Layout/paint the same paragraph multiple times to see the effect of caching
+        for (var i = 0; i < perf_count; i++) {
+          final builder = MockWebParagraphBuilder(arialStyle);
+          builder.pushStyle(textStyle);
+          builder.addText('abc000$text1');
+          final paragraph = builder.build() as MockWebParagraph;
+          timeAction('no_cache_layout', () {
+            paragraph.layout(const ParagraphConstraints(width: 1000));
+          });
+          final canvas = Canvas(recorder, region);
+          canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
+          await timeActionAsync('no_cache_paint', () async {
+            canvas.drawParagraph(paragraph, const Offset(20, 20));
+            await drawPictureUsingCurrentRenderer(
+              recorder.endRecording(),
+            ); // This is a hack to make sure the canvas is flushed
+          });
+          // We dispose of the paragraph here but it will remain alive in cache.
+          // This is to make sure that the cache is working and not creating new paragraphs.
+          paragraph.dispose();
+          // We also clear the cache here to see the effect of not having cache.
+          cache.clear();
+        }
+      }
+      cache.clear();
+      {
+        // Layout/paint the same paragraph multiple times to see the effect of caching
+        for (var i = 0; i < perf_count; i++) {
+          final builder = MockWebParagraphBuilder(arialStyle);
+          builder.pushStyle(textStyle);
+          builder.addText('abc000$text1');
+          final paragraph = builder.build() as MockWebParagraph;
+          timeAction('cache_layout', () {
+            paragraph.layout(const ParagraphConstraints(width: 1000));
+          });
+          final canvas = Canvas(recorder, region);
+          canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
+          await timeActionAsync('cache_paint', () async {
+            canvas.drawParagraph(paragraph, const Offset(20, 20));
+            await drawPictureUsingCurrentRenderer(
+              recorder.endRecording(),
+            ); // This is a hack to make sure the canvas is flushed
+          });
+          // We dispose of the paragraph here but it will remain alive in cache.
+          // This is to make sure that the cache is working and not creating new paragraphs.
+          paragraph.dispose();
+        }
+      }
+
+      await matchGoldenFile('cached_paragraph_performance.png', region: region);
+
+      WebParagraphProfiler.log();
+    },
+    timeout: Timeout.none,
+    solo: false,
+  );
+  test(
+    'Measure caching cost for multiple paragraphs',
+    () async {
+      WebParagraphProfiler.reset();
+      final recorder = PictureRecorder();
+      const region = Rect.fromLTWH(0, 0, 1000, 1000);
+
+      final arialStyle = ParagraphStyle(fontFamily: 'Roboto', fontSize: 20);
+      final textStyle = TextStyle(color: const Color(0xFF000000), fontSize: 20);
+      const text1 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+      const text2 = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+      // Layout/paint different paragraphs to see that they are cached
+      for (var n = 0; n < 3; n++) {
+        for (var i = 0; i < perf_count; i++) {
+          final builder = MockWebParagraphBuilder(arialStyle);
+          builder.pushStyle(textStyle);
+          builder.addText("ABC${(i + 1).toString().padLeft(3, '0')}$text2$n");
+          final paragraph = builder.build() as MockWebParagraph;
+
+          timeAction('nocache_layout$n', () {
+            paragraph.layout(const ParagraphConstraints(width: 1000));
+          });
+          final canvas = Canvas(recorder, region);
+          canvas.drawColor(const Color(0xFFFFFFFF), BlendMode.src);
+          await timeActionAsync('nocache_paint$n', () async {
+            canvas.drawParagraph(paragraph, const Offset(20, 20));
+            await drawPictureUsingCurrentRenderer(
+              recorder.endRecording(),
+            ); // This is a hack to make sure the canvas is flushed
+          });
+        }
+      }
+
+      await matchGoldenFile('cached_paragraph_functionality.png', region: region);
+
       WebParagraphProfiler.log();
     },
     timeout: Timeout.none,
