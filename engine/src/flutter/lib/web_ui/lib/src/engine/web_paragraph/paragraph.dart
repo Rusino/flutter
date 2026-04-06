@@ -1150,6 +1150,10 @@ class WebParagraph with ReferenceCounted implements ui.Paragraph {
     assert(end <= text.length);
     return text.substring(start, end);
   }
+
+  void resetSingleImageCache() {
+    _painter.resetCache();
+  }
 }
 
 class WebLineMetrics implements ui.LineMetrics {

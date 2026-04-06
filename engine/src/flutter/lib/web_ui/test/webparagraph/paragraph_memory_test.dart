@@ -320,6 +320,6 @@ Future<void> testMain() async {
       WebParagraphProfiler.log();
     },
     timeout: Timeout.none,
-    solo: true,
+    solo: false,
   );
 }
