@@ -36,35 +36,37 @@ abstract class Painter {
   void resetCache();
   bool hasCache();
 
+  num cacheWidth();
+  num cacheHeight();
+
+  static double epsilon = 0.001;
+
   /// Adjust the _paintCanvas scale based on device pixel ratio
+  /// With and height are already multiplied by device pixel ratio
   void resizePaintCanvas(double devicePixelRatio, double width, double height) {
-    // 1. Do we resize to 0, 0 at the end of each paint so we do not hold on to large buffers?
-    // 2. Do we keep the canvas around (even big ones) and only resize when needed?
-    // 3. Do we have a max size and reuse the canvas up to that size?
-    if (currentDevicePixelRatio == devicePixelRatio &&
-        paintCanvas.width == (width * devicePixelRatio).ceilToDouble() &&
-        paintCanvas.height == (height * devicePixelRatio).ceilToDouble()) {
-      // We need to resize canvas whenever the requested size changes
-      return;
-    }
-
-    if (currentDevicePixelRatio != devicePixelRatio) {
-      // We need to reset the scale transform whenever the device pixel ratio changes
-      resetCache();
-    }
-
     // Since the output canvas is zoomed by device pixel ratio,
     // we need to adjust our offscreen canvas accordingly to avoid pixelation
     // that would happen if didn't resize it.
-    if (currentDevicePixelRatio != null) {
+    if (((currentDevicePixelRatio ?? 1.0) - devicePixelRatio).abs() > epsilon) {
+      // We need to reset the scale transform whenever the device pixel ratio changes
+      print('resizePaintCanvas: restore the context to unscaled state');
       paintContext.restore(); // Restore to unscaled state
+      print('resizePaintCanvas: apply new scale for devicePixelRatio $devicePixelRatio');
+      paintContext.scale(devicePixelRatio, devicePixelRatio);
+      paintContext.save();
+      currentDevicePixelRatio = devicePixelRatio;
     }
-    paintCanvas.width = (width * devicePixelRatio).ceilToDouble();
-    paintCanvas.height = (height * devicePixelRatio).ceilToDouble();
-    paintContext.scale(devicePixelRatio, devicePixelRatio);
-    paintContext.save();
 
-    currentDevicePixelRatio = devicePixelRatio;
+    if (paintCanvas.width == width.ceilToDouble() && paintCanvas.height == height.ceilToDouble()) {
+      // We don't need to resize canvas if the requested size has not changed
+      // (At this point it could have been changed for another paragraph only)
+      print('resizePaintCanvas: no resize needed for $width x $height @ $devicePixelRatio');
+      return;
+    }
+
+    print('resizePaintCanvas: resize canvas to $width x $height @ $devicePixelRatio');
+    paintCanvas.width = width.ceilToDouble();
+    paintCanvas.height = height.ceilToDouble();
 
     if (WebParagraphDebug.logging) {
       WebParagraphDebug.log(
@@ -113,16 +115,32 @@ class CanvasKitPainter extends Painter {
 
   @override
   void drawParagraph(ui.Canvas canvas, ui.Rect sourceRect, ui.Rect targetRect) {
-    if (!hasSingleImageCache) {
-      // We should have resized the small canvas before calling this method
-      if (sourceRect.width != paintCanvas.width || sourceRect.height != paintCanvas.height) {
-        assert(
-          false,
-          'resizePaintCanvas needed: '
-          'canvas=${paintCanvas.width}x${paintCanvas.height} vs bounds=${sourceRect.width}x${sourceRect.height}',
-        );
-      }
+    // We should have resized the small canvas before calling this method
+    if (sourceRect.width != paintCanvas.width || sourceRect.height != paintCanvas.height) {
+      assert(
+        false,
+        'ERROR: resizePaintCanvas needed: '
+        'canvas=${paintCanvas.width}x${paintCanvas.height} vs bounds=${sourceRect.width}x${sourceRect.height}',
+      );
+      print('ERROR: canvas has not been resized for ${sourceRect.width}x${sourceRect.height}');
+    }
 
+    // We need to reset the cache before drawing if the size of the paragraph has changed to avoid keeping the old image in memory
+    if (hasSingleImageCache &&
+        ((sourceRect.width != _singleImageCache!.width) ||
+            (sourceRect.height != _singleImageCache!.height))) {
+      assert(
+        false,
+        'ERROR: cache has not been reset: '
+        'canvas=${paintCanvas.width}x${paintCanvas.height} vs bounds=${sourceRect.width}x${sourceRect.height}',
+      );
+      print(
+        'ERROR: cache has not been reset: '
+        'canvas=${paintCanvas.width}x${paintCanvas.height} vs bounds=${sourceRect.width}x${sourceRect.height}',
+      );
+    }
+
+    if (!hasSingleImageCache) {
       final DomImageData imageData = paintContext.getImageData(
         0,
         0,
@@ -152,6 +170,10 @@ class CanvasKitPainter extends Painter {
         throw Exception('Failed to convert text image bitmap to an SkImage.');
       }
       _singleImageCache = CkImage(skImage);
+    } else {
+      print(
+        'drawParagraph: using cached image for sourceRect ${sourceRect.width}x${sourceRect.height}',
+      );
     }
 
     canvas.drawImageRect(
@@ -173,5 +195,15 @@ class CanvasKitPainter extends Painter {
   @override
   bool hasCache() {
     return _singleImageCache != null;
+  }
+
+  @override
+  num cacheHeight() {
+    return _singleImageCache?.height ?? 0.0;
+  }
+
+  @override
+  num cacheWidth() {
+    return _singleImageCache?.width ?? 0.0;
   }
 }

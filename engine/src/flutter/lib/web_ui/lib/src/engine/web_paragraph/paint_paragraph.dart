@@ -210,7 +210,14 @@ class PaintParagraph extends TextPaint {
     // TODO(jlavrova): Test how the image cache works after zooming in or out.
     painter.resizePaintCanvas(ui.window.devicePixelRatio, sourceRect.width, sourceRect.height);
 
-    if (!painter.hasSingleImageCache) {
+    if (!painter.hasSingleImageCache ||
+        (sourceRect.width != painter.cacheWidth() || sourceRect.height != painter.cacheHeight())) {
+      print(
+        'drawParagraph: sourceRect size ${sourceRect.width}x${sourceRect.height} '
+        'is different from cache image size ${painter.cacheWidth()}x${painter.cacheHeight()}, resetting cache',
+      );
+      painter.resetCache();
+
       // Fill out all the blocks on Canvas2D canvas
       _fillAllBlocks(StyleElements.shadows, layout);
       _fillAllBlocks(StyleElements.text, layout);

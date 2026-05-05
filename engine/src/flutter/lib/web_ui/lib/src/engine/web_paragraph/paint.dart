@@ -150,6 +150,7 @@ abstract class TextPaint {
 
     if (WebParagraphDebug.logging) {
       WebParagraphDebug.log(
+        'devicePixelRatio: $devicePixelRatio\n'
         'calculateParagraph source: ${sourceRect.left}:${sourceRect.right}x${sourceRect.top}:${sourceRect.bottom} => '
         'target: ${targetRect.left}:${targetRect.right}x${targetRect.top}:${targetRect.bottom}',
       );
