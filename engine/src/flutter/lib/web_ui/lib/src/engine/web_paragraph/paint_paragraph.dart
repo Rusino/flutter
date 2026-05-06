@@ -208,14 +208,10 @@ class PaintParagraph extends TextPaint {
       ui.window.devicePixelRatio,
     );
     // TODO(jlavrova): Test how the image cache works after zooming in or out.
-    painter.resizePaintCanvas(
-      ui.window.devicePixelRatio,
-      sourceRect.width,
-      sourceRect.height,
-    );
+    painter.resizePaintCanvas(ui.window.devicePixelRatio, sourceRect.width, sourceRect.height);
     if (!painter.hasCache()) {
       print(
-        'drawParagraph: there no cache or it has been reset when resizing canvas, need to redraw the paragraph on canvas2D',
+        'drawParagraph: there no cache or it has been reset when setting DPR, need to redraw the paragraph on canvas2D',
       );
       // Fill out all the blocks on Canvas2D canvas
       _fillAllBlocks(StyleElements.shadows, layout);

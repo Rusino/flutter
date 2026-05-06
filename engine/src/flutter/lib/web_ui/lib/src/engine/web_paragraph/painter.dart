@@ -62,7 +62,10 @@ abstract class Painter {
         (cacheWidth() - width.ceilToDouble()).abs() > Painter.epsilon &&
         (cacheHeight() - height.ceilToDouble()).abs() > Painter.epsilon) {
       // Cached image size changed; we need to reset the cache to avoid keeping the old image in memory
-      print('resizePaintCanvas: reset cache when its size does not match the required size');
+      print(
+        'resizePaintCanvas: reset cache when its size does not match the required size'
+        ' cache=${cacheWidth()}x${cacheHeight()} vs size=${width.ceilToDouble()}x${height.ceilToDouble()}',
+      );
       resetCache();
     }
 
