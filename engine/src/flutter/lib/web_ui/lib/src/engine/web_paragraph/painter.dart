@@ -67,6 +67,7 @@ class CanvasKitPainter extends Painter {
     _lastDevicePixelRatio = dpr;
 
     if (!hasCache) {
+      // print(' --- CACHE MISS');
       final imageInfo = SkImageInfo(
         alphaType: canvasKit.AlphaType.Unpremul,
         colorType: canvasKit.ColorType.RGBA_8888,
@@ -81,6 +82,8 @@ class CanvasKitPainter extends Painter {
         throw Exception('Failed to convert text image bitmap to an SkImage.');
       }
       _singleImageCache = CkImage(skImage);
+    } else {
+      // print(' +++ CACHE HIT');
     }
 
     canvas.drawImageRect(

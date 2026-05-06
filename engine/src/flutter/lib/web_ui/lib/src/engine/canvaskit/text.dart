@@ -793,13 +793,15 @@ SkFontStyle toSkFontStyle(ui.FontWeight? fontWeight, ui.FontStyle? fontStyle) {
 
 /// The CanvasKit implementation of [ui.Paragraph].
 class CkParagraph implements ui.Paragraph {
-  CkParagraph(SkParagraph skParagraph, this._paragraphStyle) {
+  CkParagraph(SkParagraph skParagraph, this._paragraphStyle, this.text) {
     _ref = CkUniqueRef<SkParagraph>(this, skParagraph, 'Paragraph');
   }
 
   late final CkUniqueRef<SkParagraph> _ref;
 
   SkParagraph get skiaObject => _ref.nativeObject;
+
+  final String text;
 
   /// The constraints from the last time we laid the paragraph out.
   ///
@@ -930,6 +932,7 @@ class CkParagraph implements ui.Paragraph {
 
   @override
   void layout(ui.ParagraphConstraints constraints) {
+    print('CK LAYOUT (width: ${constraints.width}) "$text"');
     assert(!_disposed, 'Paragraph has been disposed.');
     if (_lastLayoutConstraints == constraints.width) {
       return;
@@ -968,6 +971,12 @@ class CkParagraph implements ui.Paragraph {
       );
       rethrow;
     }
+    print(' >> maxIntrinsicWidth: $_maxIntrinsicWidth');
+    print(' >> minIntrinsicWidth: $_minIntrinsicWidth');
+    print(' >> longestLine: $_longestLine');
+    print(' >> height: $_height');
+    print(' >> alphabeticBaseline: $_alphabeticBaseline');
+    print(' >> ideographicBaseline: $_ideographicBaseline');
   }
 
   @override
@@ -1155,8 +1164,9 @@ class CkParagraphBuilder implements ui.ParagraphBuilder {
 
   @override
   CkParagraph build() {
+    final String text = _paragraphBuilder.getText();
     final SkParagraph builtParagraph = _buildSkParagraph();
-    return CkParagraph(builtParagraph, _style);
+    return CkParagraph(builtParagraph, _style, text);
   }
 
   /// Builds the CkParagraph with the builder and deletes the builder.

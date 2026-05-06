@@ -206,6 +206,11 @@ class PaintParagraph extends TextPaint {
       offset,
       ui.window.devicePixelRatio,
     );
+    // if (layout.paragraph.text.startsWith('ENABLED')) {
+    //   print('PAINT "${layout.paragraph.text}"');
+    //   print(' >> src: ${sourceRect.width}x${sourceRect.height}');
+    //   print(' >> dst: ${targetRect.width}x${targetRect.height}');
+    // }
 
     painter.drawParagraph(
       canvas,

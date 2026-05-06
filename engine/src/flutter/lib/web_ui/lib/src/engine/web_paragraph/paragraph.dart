@@ -957,6 +957,7 @@ class WebParagraph implements ui.Paragraph {
 
   @override
   void layout(ui.ParagraphConstraints constraints) {
+    // print('WP LAYOUT (width: $width) "$text"');
     _layout.performLayout(constraints.width);
     WebParagraphDebug.apiTrace(
       'layout("$text", ${constraints.width.toStringAsFixed(4)}}): '

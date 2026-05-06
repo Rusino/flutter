@@ -71,6 +71,15 @@ class TextLayout {
     wrapText(width);
     formatLines(width);
 
+    if (paragraph.text.startsWith('ENABLED')) {
+      print(' >> maxIntrinsicWidth: ${paragraph.maxIntrinsicWidth}');
+      print(' >> minIntrinsicWidth: ${paragraph.minIntrinsicWidth}');
+      print(' >> longestLine: ${paragraph.longestLine}');
+      print(' >> height: ${paragraph.height}');
+      print(' >> alphabeticBaseline: ${paragraph.alphabeticBaseline}');
+      print(' >> ideographicBaseline: ${paragraph.ideographicBaseline}');
+    }
+
     paragraph.clearPaintCache();
   }
 
