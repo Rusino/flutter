@@ -240,7 +240,7 @@ Future<void> testMain() async {
       builder.pop();
       builder.addText(']]]');
       final WebParagraph paragraph = builder.build();
-      final WebTextStyle merged1 = paragraph.paragraphStyle.textStyle
+      final WebTextStyle merged1 = (paragraph.paragraphStyle as WebParagraphStyle).textStyle
           .mergeWith(textStyle1)
           .mergeWith(defaultBackground);
       final WebTextStyle merged12 = merged1.mergeWith(textStyle2);
@@ -285,7 +285,7 @@ Future<void> testMain() async {
     builder.pushStyle(textStyle3);
     builder.addText('[3]]]');
     final WebParagraph paragraph = builder.build();
-    final WebTextStyle merged1 = paragraph.paragraphStyle.textStyle
+    final WebTextStyle merged1 = (paragraph.paragraphStyle as WebParagraphStyle).textStyle
         .mergeWith(textStyle1)
         .mergeWith(defaultBackground);
     final WebTextStyle merged12 = merged1.mergeWith(textStyle2);

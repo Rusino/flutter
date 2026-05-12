@@ -4,7 +4,7 @@
 
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
-import 'package:ui/src/engine/web_paragraph/paragraph.dart';
+import 'package:ui/src/engine.dart';
 import 'package:ui/ui.dart';
 import 'package:web_engine_tester/golden_tester.dart';
 
@@ -13,6 +13,45 @@ import '../ui/utils.dart';
 
 void main() {
   internalBootstrapBrowserTest(() => testMain);
+}
+
+void printParagraphMetrics(Paragraph paragraph) {
+  print(
+    'Paragraph metrics:\n'
+    'width=${paragraph.width},\n'
+    'height=${paragraph.height},\n'
+    'longestLine=${paragraph.longestLine},\n'
+    'minIntrinsicWidth=${paragraph.minIntrinsicWidth},\n'
+    'maxIntrinsicWidth=${paragraph.maxIntrinsicWidth},\n'
+    'alphabeticBaseline=${paragraph.alphabeticBaseline},\n'
+    'ideographicBaseline=${paragraph.ideographicBaseline}\n',
+  );
+  final WebParagraphStyle? webParagraphStyle = paragraph is WebParagraph
+      ? paragraph.getParagraphStyle() as WebParagraphStyle
+      : null;
+  final CkParagraphStyle? ckParagraphStyle = paragraph is CkParagraph
+      ? paragraph.getParagraphStyle() as CkParagraphStyle
+      : null;
+  final StrutStyle? strutStyle = webParagraphStyle?.strutStyle ?? ckParagraphStyle?.strutStyle;
+  if (strutStyle is WebStrutStyle) {
+    print(
+      'Strut style:'
+      'fontSize=${strutStyle.fontSize}, height=${strutStyle.height}, '
+      'leading=${strutStyle.leading}, leadingDistribution=${strutStyle.leadingDistribution}, '
+      'forceStrutHeight=${strutStyle.forceStrutHeight}',
+    );
+  } else {
+    print('No known strut style');
+  }
+  final List<LineMetrics> metrics = paragraph.computeLineMetrics();
+  for (final metric in metrics) {
+    print(
+      'Line[${metric.lineNumber}]: '
+      'width=${metric.width}, height=${metric.height} '
+      'ascent=${metric.ascent}, descent=${metric.descent}, '
+      'baseline=${metric.baseline}, unscaledAscent=${metric.unscaledAscent}, ',
+    );
+  }
 }
 
 Future<void> testMain() async {
@@ -1118,5 +1157,134 @@ Future<void> testMain() async {
 
     await drawPictureUsingCurrentRenderer(recorder.endRecording());
     await matchGoldenFile('locales.png', region: region);
+  });
+
+  test('NoHeightMultiplier', () async {
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+    final recorder = PictureRecorder();
+    const region = Rect.fromLTWH(0, 0, 1000, 500);
+    final canvas = Canvas(recorder, region);
+    canvas.drawColor(const Color(0xFFFF0000), BlendMode.src);
+    final blackPaint = Paint()..color = const Color(0xFF000000);
+    final whitePaint = Paint()..color = const Color(0xFFFFFFFF);
+
+    final paragraphStyle = ParagraphStyle();
+    final style = TextStyle(
+      foreground: blackPaint,
+      background: whitePaint,
+      fontSize: 40,
+      fontFamily: 'sans-serif',
+      height: 1.0,
+    );
+
+    final builder = ParagraphBuilder(paragraphStyle);
+    builder.pushStyle(style);
+    builder.addText('Some text long enough to be on two lines');
+    builder.pop();
+    final Paragraph paragraph = builder.build();
+    paragraph.layout(const ParagraphConstraints(width: 500));
+    //printParagraphMetrics(paragraph);
+    canvas.drawParagraph(paragraph, Offset.zero);
+
+    await drawPictureUsingCurrentRenderer(recorder.endRecording());
+    await matchGoldenFile('NoHeightMultiplier.png', region: region);
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+  });
+
+  test('HeightMultiplier143', () async {
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+    final recorder = PictureRecorder();
+    const region = Rect.fromLTWH(0, 0, 1000, 500);
+    final canvas = Canvas(recorder, region);
+    canvas.drawColor(const Color(0xFFFF0000), BlendMode.src);
+    final blackPaint = Paint()..color = const Color(0xFF000000);
+    final whitePaint = Paint()..color = const Color(0xFFFFFFFF);
+
+    final paragraphStyle = ParagraphStyle();
+    final style = TextStyle(
+      foreground: blackPaint,
+      background: whitePaint,
+      fontSize: 40,
+      fontFamily: 'Arial',
+      height: 1.43,
+    );
+
+    final builder = ParagraphBuilder(paragraphStyle);
+    builder.pushStyle(style);
+    builder.addText('Some text long enough to be on two lines');
+    builder.pop();
+    final Paragraph paragraph = builder.build();
+    paragraph.layout(const ParagraphConstraints(width: 500));
+    //printParagraphMetrics(paragraph);
+    canvas.drawParagraph(paragraph, Offset.zero);
+
+    await drawPictureUsingCurrentRenderer(recorder.endRecording());
+    await matchGoldenFile('HeightMultiplier143.png', region: region);
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+  });
+
+  test('Zoom2', () async {
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(2.0);
+    final recorder = PictureRecorder();
+    const region = Rect.fromLTWH(0, 0, 1000, 500);
+    final canvas = Canvas(recorder, region);
+    canvas.drawColor(const Color(0xFFFF0000), BlendMode.src);
+    final blackPaint = Paint()..color = const Color(0xFF000000);
+    final whitePaint = Paint()..color = const Color(0xFFFFFFFF);
+
+    final paragraphStyle = ParagraphStyle();
+    final style = TextStyle(
+      foreground: blackPaint,
+      background: whitePaint,
+      fontSize: 40,
+      fontFamily: 'Arial',
+      height: 1.43,
+    );
+
+    final builder = ParagraphBuilder(paragraphStyle);
+    builder.pushStyle(style);
+    builder.addText('Some text long enough to be on two lines');
+    builder.pop();
+    final Paragraph paragraph = builder.build();
+    paragraph.layout(const ParagraphConstraints(width: 500));
+    canvas.drawParagraph(paragraph, Offset.zero);
+    //printParagraphMetrics(paragraph);
+
+    await drawPictureUsingCurrentRenderer(recorder.endRecording());
+    await matchGoldenFile('zoom2.png', region: region);
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+  });
+
+  test('Zoom05', () async {
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(0.5);
+    final recorder = PictureRecorder();
+    const region = Rect.fromLTWH(0, 0, 1000, 500);
+    final canvas = Canvas(recorder, region);
+
+    canvas.drawColor(const Color(0xFFFF0000), BlendMode.src);
+    final blackPaint = Paint()..color = const Color(0xFF000000);
+    final whitePaint = Paint()..color = const Color(0xFFFFFFFF);
+
+    final paragraphStyle = ParagraphStyle();
+    final style = TextStyle(
+      foreground: blackPaint,
+      background: whitePaint,
+      fontSize: 40,
+      fontFamily: 'Arial',
+      height: 1.43,
+    );
+
+    final builder = ParagraphBuilder(paragraphStyle);
+    builder.pushStyle(style);
+    builder.addText('Some text long enough to be on two lines');
+    builder.pop();
+    final Paragraph paragraph = builder.build();
+    paragraph.layout(const ParagraphConstraints(width: 500));
+    //printParagraphMetrics(paragraph);
+    canvas.drawParagraph(paragraph, Offset.zero);
+
+    await drawPictureUsingCurrentRenderer(recorder.endRecording());
+    await matchGoldenFile('zoom05.png', region: region);
+    EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
   });
 }

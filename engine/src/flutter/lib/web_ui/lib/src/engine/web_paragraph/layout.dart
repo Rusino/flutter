@@ -70,17 +70,6 @@ class TextLayout {
     // Wrapping text into lines is required on every layout.
     wrapText(width);
     formatLines(width);
-
-    if (paragraph.text.startsWith('ENABLED')) {
-      print(' >> maxIntrinsicWidth: ${paragraph.maxIntrinsicWidth}');
-      print(' >> minIntrinsicWidth: ${paragraph.minIntrinsicWidth}');
-      print(' >> longestLine: ${paragraph.longestLine}');
-      print(' >> height: ${paragraph.height}');
-      print(' >> alphabeticBaseline: ${paragraph.alphabeticBaseline}');
-      print(' >> ideographicBaseline: ${paragraph.ideographicBaseline}');
-    }
-
-    paragraph.clearPaintCache();
   }
 
   void calculateStrutMetrics() {
@@ -531,7 +520,7 @@ class TextLayout {
               .getTextRangeSelectionInBlock(block, intersect)
               .translate(
                 block.shiftFromLineStart, // We do not use baseline for placeholder
-                block.rawFontBoundingBoxAscent,
+                block.multipliedFontBoundingBoxAscent,
               );
         }
         // Now we need to recalculate the rects
@@ -542,9 +531,9 @@ class TextLayout {
                 firstRect.top +
                 line.advance.top +
                 line.fontBoundingBoxAscent -
-                block.rawFontBoundingBoxAscent;
-            bottom = top + block.rawHeight;
-            assert((block.advance.height - (bottom - top).abs() < epsilon));
+                block.multipliedFontBoundingBoxAscent;
+            bottom = top + block.multipliedHeight;
+            assert((block.multipliedHeight - (bottom - top).abs() < epsilon));
           case ui.BoxHeightStyle.max:
             top = firstRect.top + line.advance.top;
             bottom = firstRect.top + line.advance.bottom;
@@ -797,6 +786,7 @@ class TextLayout {
       assert(intersection.isNotEmpty);
 
       final WebCluster cluster = allClusters[intersection.start];
+      //print('line: ${line.advance} block: ${visualBlock.advance} cluster: ${cluster.advance}');
       return ui.GlyphInfo(
         cluster.advance.translate(
           line.advance.left + line.formattingShift + visualBlock.spanShiftFromLineStart,
@@ -1086,7 +1076,19 @@ class PlaceholderCluster extends WebCluster {
 
 // This is the minimal range of cluster that belongs to the same bidi run and to the same style block
 abstract class LineBlock {
-  LineBlock(this.span, this._bidiLevel, this.clusterRange, this.textRange, this.shiftFromLineStart);
+  LineBlock(
+    this.span,
+    this._bidiLevel,
+    this.clusterRange,
+    this.textRange,
+    this.shiftFromLineStart,
+  ) {
+    final double multiplier =
+        (_heightMultiplier * span.style.fontSize!) /
+        (rawFontBoundingBoxAscent + rawFontBoundingBoxDescent);
+    _multipliedFontBoundingBoxAscent = rawFontBoundingBoxAscent * multiplier;
+    _multipliedFontBoundingBoxDescent = rawFontBoundingBoxDescent * multiplier;
+  }
 
   double get _heightMultiplier;
 
@@ -1096,17 +1098,20 @@ abstract class LineBlock {
 
   double get rawFontBoundingBoxDescent => span.fontBoundingBoxDescent;
 
-  double get multipliedHeight => rawHeight * _heightMultiplier;
+  double get multipliedFontBoundingBoxAscent => _multipliedFontBoundingBoxAscent;
 
-  double get multipliedFontBoundingBoxAscent => rawFontBoundingBoxAscent * _heightMultiplier;
+  double get multipliedFontBoundingBoxDescent => _multipliedFontBoundingBoxDescent;
 
-  double get multipliedFontBoundingBoxDescent => rawFontBoundingBoxDescent * _heightMultiplier;
+  double get multipliedHeight =>
+      _multipliedFontBoundingBoxAscent + _multipliedFontBoundingBoxDescent;
 
   final ParagraphSpan span;
 
   WebTextStyle get style => span.style;
 
   final int _bidiLevel;
+  late double _multipliedFontBoundingBoxAscent;
+  late double _multipliedFontBoundingBoxDescent;
 
   bool get isLtr => _bidiLevel.isEven;
 

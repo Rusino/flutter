@@ -643,6 +643,7 @@ abstract class Paragraph {
   double get alphabeticBaseline;
   double get ideographicBaseline;
   bool get didExceedMaxLines;
+  ParagraphStyle getParagraphStyle();
   void layout(ParagraphConstraints constraints);
   List<TextBox> getBoxesForRange(
     int start,

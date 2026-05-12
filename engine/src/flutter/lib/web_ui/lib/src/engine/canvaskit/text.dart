@@ -77,6 +77,8 @@ class CkParagraphStyle implements ui.ParagraphStyle {
   final String? _ellipsis;
   final ui.Locale? _locale;
 
+  ui.StrutStyle? get strutStyle => _strutStyle;
+
   static SkTextStyleProperties toSkTextStyleProperties(
     String? fontFamily,
     double? fontSize,
@@ -816,6 +818,8 @@ class CkParagraph implements ui.Paragraph {
   /// This is used to resurrect the paragraph if the initial paragraph
   /// is deleted.
   final CkParagraphStyle _paragraphStyle;
+  @override
+  ui.ParagraphStyle getParagraphStyle() => _paragraphStyle;
 
   @override
   double get alphabeticBaseline => _alphabeticBaseline;

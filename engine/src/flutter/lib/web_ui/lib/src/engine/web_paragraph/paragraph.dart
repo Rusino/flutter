@@ -630,6 +630,7 @@ class TextSpan extends ParagraphSpan {
   final ui.TextDirection? textDirection;
 
   late final DomTextMetrics _metrics = _getMetrics();
+  DomTextMetrics get metrics => _metrics;
 
   @override
   late final double fontBoundingBoxAscent = _metrics.fontBoundingBoxAscent;
@@ -839,11 +840,16 @@ class WebStrutStyle implements ui.StrutStyle {
 ///
 /// See: https://chromestatus.com/feature/5075532483657728
 class WebParagraph implements ui.Paragraph {
-  WebParagraph(this.paragraphStyle, this.spans, this.text);
+  WebParagraph(this._paragraphStyle, this.spans, this.text);
 
-  final WebParagraphStyle paragraphStyle;
+  final WebParagraphStyle _paragraphStyle;
   final List<ParagraphSpan> spans;
   final String text;
+
+  @override
+  ui.ParagraphStyle getParagraphStyle() => _paragraphStyle;
+
+  WebParagraphStyle get paragraphStyle => _paragraphStyle;
 
   @override
   double alphabeticBaseline = 0;

@@ -1577,6 +1577,10 @@ extension type DomTextMetrics._(JSObject _) implements JSObject {
 
   external double get fontBoundingBoxDescent;
 
+  external double get actualBoundingBoxAscent;
+
+  external double get actualBoundingBoxDescent;
+
   @JS('getSelectionRects')
   external JSArray<JSAny> _getSelectionRects(int begin, int end);
   List<DomRectReadOnly> getSelectionRects(int begin, int end) =>

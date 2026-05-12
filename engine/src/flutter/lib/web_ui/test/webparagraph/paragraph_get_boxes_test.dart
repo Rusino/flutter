@@ -171,7 +171,14 @@ Future<void> testMain() async {
     final ui.TextBox bottom1 = rectsBottom[1];
     final ui.TextBox middle0 = rectsMiddle[0];
     final ui.TextBox middle1 = rectsMiddle[1];
-
+    /*
+    print('top0: ${top0.toRect()}');
+    print('middle0: ${middle0.toRect()}');
+    print('bottom0: ${bottom0.toRect()}');
+    print('top1: ${top1.toRect()}');
+    print('middle1: ${middle1.toRect()}');
+    print('bottom1: ${bottom1.toRect()}');
+*/
     expect((top0.top - bottom0.top).abs() < EPSILON, true);
     expect((top0.top - middle0.top).abs() < EPSILON, true);
     expect(top0.bottom < middle0.bottom, true);
