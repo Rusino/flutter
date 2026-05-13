@@ -786,7 +786,6 @@ class TextLayout {
       assert(intersection.isNotEmpty);
 
       final WebCluster cluster = allClusters[intersection.start];
-      //print('line: ${line.advance} block: ${visualBlock.advance} cluster: ${cluster.advance}');
       return ui.GlyphInfo(
         cluster.advance.translate(
           line.advance.left + line.formattingShift + visualBlock.spanShiftFromLineStart,
@@ -1083,6 +1082,11 @@ abstract class LineBlock {
     this.textRange,
     this.shiftFromLineStart,
   ) {
+    if (_heightMultiplier == 1.0) {
+      _multipliedFontBoundingBoxAscent = rawFontBoundingBoxAscent;
+      _multipliedFontBoundingBoxDescent = rawFontBoundingBoxDescent;
+      return;
+    }
     final double multiplier =
         (_heightMultiplier * span.style.fontSize!) /
         (rawFontBoundingBoxAscent + rawFontBoundingBoxDescent);
