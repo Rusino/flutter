@@ -955,9 +955,11 @@ class WebParagraph implements ui.Paragraph {
   ui.GlyphInfo? getGlyphInfoAt(int codeUnitOffset) {
     if (codeUnitOffset < 0 || codeUnitOffset > text.length) {
       WebParagraphDebug.apiTrace('getGlyphInfoAt($codeUnitOffset): null');
+      print('getGlyphInfoAt($codeUnitOffset): null (out of text range)');
       return null;
     }
     final ui.GlyphInfo? result = _layout.getGlyphInfoAt(codeUnitOffset);
+    print('getGlyphInfoAt($codeUnitOffset): $result');
     WebParagraphDebug.apiTrace('getGlyphInfoAt($codeUnitOffset): $result');
     return result;
   }
@@ -989,6 +991,9 @@ class WebParagraph implements ui.Paragraph {
       'longestLine=${longestLine.toStringAsFixed(4)} '
       'maxLineWidthWithTrailingSpaces=${maxLineWidthWithTrailingSpaces.toStringAsFixed(4)} lines=${_layout.lines.length}',
     );
+    getLineBoundary(const ui.TextPosition(offset: 14));
+    getLineBoundary(const ui.TextPosition(offset: 13));
+    getLineBoundary(const ui.TextPosition(offset: 12));
   }
 
   void paint(ui.Canvas canvas, ui.Offset offset) {
@@ -1001,6 +1006,7 @@ class WebParagraph implements ui.Paragraph {
     final int codepointPosition = position.offset;
     final ui.TextRange result = _layout.getLineBoundary(codepointPosition);
     WebParagraphDebug.apiTrace('getLineBoundary($position): $result');
+    print('getLineBoundary($position): $result');
     return result;
   }
 

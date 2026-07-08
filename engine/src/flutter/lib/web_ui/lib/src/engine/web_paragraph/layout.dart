@@ -84,6 +84,15 @@ class TextLayout {
     // TODO(jlavrova): Optimize. If lines are the same as the previous layout, we don't need to
     // clear the paint cache.
     paragraph.clearPaintCache();
+
+    var i = 0;
+    for (final TextLine line in lines) {
+      i++;
+      print(
+        'line[$i]: ${line.textRange} ${line.fullWidth} ${line.trailingSpacesWidth} ${line.height} '
+        '${line.allLineTextRange}=${line.textRange}+${line.whitespacesRange} ${line.hardLineBreakStart}',
+      );
+    }
   }
 
   void calculateStrutMetrics() {
@@ -431,6 +440,13 @@ class TextLayout {
       line.updateBoundingBox(block);
     }
 
+    if (line.visualBlocks.isEmpty) {
+      // This is a special case when we have a last line after a hard line break and it has no text or whitespaces
+      // This line didn't get any metrics from the blocks so we need to update it with the metrics from the last block of the previous line
+      // The previous block garanteed to have metrics because it could not be empty
+      line.updateBoundingBox(lines.last.visualBlocks.last);
+    }
+
     line.advance = ui.Rect.fromLTWH(
       0,
       top,
@@ -776,14 +792,19 @@ class TextLayout {
         assert(false);
       }
       // We found the line but not the block because the offset is to the right of all blocks in this line.
-      // We deal with it the same way as if we didn't find the line (taking the last block of the last line)
-      final LineBlock lastVisualBlockInLine = lines.last.visualBlocks.last;
-      return lastVisualBlockInLine.isLtr
-          ? ui.TextPosition(
-              offset: lastVisualBlockInLine.textRange.end,
-              affinity: ui.TextAffinity.upstream,
-            )
-          : ui.TextPosition(offset: lastVisualBlockInLine.textRange.start);
+      // We deal with it the same way as if we didn't find the line (taking the last block of the last line if it exists)
+      if (lines.last.visualBlocks.isEmpty) {
+        // This is a special case when the last line is empty (it has no visual blocks)
+        return ui.TextPosition(offset: line.textRange.end);
+      } else {
+        final LineBlock lastVisualBlockInLine = lines.last.visualBlocks.last;
+        return lastVisualBlockInLine.isLtr
+            ? ui.TextPosition(
+                offset: lastVisualBlockInLine.textRange.end,
+                affinity: ui.TextAffinity.upstream,
+              )
+            : ui.TextPosition(offset: lastVisualBlockInLine.textRange.start);
+      }
     }
 
     // This is the default result for any position outside of the paragraph width and height
@@ -858,7 +879,7 @@ class TextLayout {
         // We only have the start position of the hard line break
         // so we check for ">=" instead of ">" to include the hard line break in the range
         if (line.hardLineBreakStart >= codepointPosition) {
-          return ui.TextRange(start: line.allLineTextRange.start, end: line.hardLineBreakStart);
+          return ui.TextRange(start: line.allLineTextRange.start, end: line.hardLineBreakStart + 1);
         }
       } else {
         // The line has no hard line break, so we can use the end of the line

@@ -146,14 +146,18 @@ class TextWrapper {
     // Flutter wants to have another (empty) line if \n is the last codepoint in the text
     // This empty line gets in a way of detecting line visual runs (there isn't any)
     if (hardLineBreakClusterIndex != -1) {
-      final emptyClusterRange = ClusterRange(
-        start: _layout.allClusters.length - 1,
-        end: _layout.allClusters.length - 1,
+      final emptyTextRange = ClusterRange(
+        start: hardLineBreakClusterIndex,
+        end: hardLineBreakClusterIndex,
+      );
+      final emptyWhitespaceRange = ClusterRange(
+        start: hardLineBreakClusterIndex,
+        end: hardLineBreakClusterIndex + 1,
       );
       line._top += _layout.addLine(
-        emptyClusterRange,
-        emptyClusterRange,
-        false,
+        emptyTextRange,
+        emptyWhitespaceRange,
+        true,
         hardLineBreakClusterIndex,
         line._top,
       );
