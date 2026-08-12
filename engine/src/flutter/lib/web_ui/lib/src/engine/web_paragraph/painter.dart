@@ -42,8 +42,13 @@ void _resizePaintCanvas(double devicePixelRatio, ui.Rect rect) {
   // We shift the target rect to the correct x position inside the line and
   // the correct y position of the line itself
   // (and then to the paragraph.paint x and y)
-  final targetRect = ui.Rect.fromLTWH(offset.dx, offset.dy, advance.width, advance.height);
-
+  final targetRect = ui.Rect.fromLTWH(
+    offset.dx,
+    offset.dy,
+    advance.width * dpr,
+    advance.height * dpr,
+  );
+  print('dpr: $dpr targetRect: $targetRect');
   return (sourceRect, targetRect);
 }
 
@@ -65,9 +70,10 @@ void _resizePaintCanvas(double devicePixelRatio, ui.Rect rect) {
   final targetRect = ui.Rect.fromLTWH(
     (offset.dx + paragraph.paintBounds.left).floorToDouble(),
     (offset.dy + paragraph.paintBounds.top).floorToDouble(),
-    (sourceRect.width / devicePixelRatio).ceilToDouble(),
-    (sourceRect.height / devicePixelRatio).ceilToDouble(),
+    sourceRect.width,
+    sourceRect.height,
   );
+  print('devicePixelRatio: $devicePixelRatio targetRect: $targetRect');
 
   return (sourceRect, targetRect);
 }

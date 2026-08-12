@@ -45,8 +45,8 @@ class CanvasKitPainter extends WebParagraphPainter {
         alphaType: canvasKit.AlphaType.Unpremul,
         colorType: canvasKit.ColorType.RGBA_8888,
         colorSpace: SkColorSpaceSRGB,
-        width: sourceRect.width,
-        height: sourceRect.height,
+        width: sourceRect.width.ceilToDouble(),
+        height: sourceRect.height.ceilToDouble(),
       );
       final Uint8List imageBytes = generateParagraphImage();
       final SkImage? skImage = canvasKit.MakeImage(
@@ -60,16 +60,19 @@ class CanvasKitPainter extends WebParagraphPainter {
       }
       _singleImageCache = EngineImage(
         CkImageDelegate(skImage),
-        skImage.width().toInt(),
-        skImage.height().toInt(),
+        skImage.width().ceil(),
+        skImage.height().ceil(),
       );
     }
 
+    canvas.save();
+    canvas.scale(1.0, 1.0);
     canvas.drawImageRect(
       _singleImageCache!,
       sourceRect,
       targetRect,
       ui.Paint()..filterQuality = ui.FilterQuality.none,
     );
+    canvas.restore();
   }
 }
