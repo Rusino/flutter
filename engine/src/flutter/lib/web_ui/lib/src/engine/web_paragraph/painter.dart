@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:meta/meta.dart';
@@ -21,12 +22,21 @@ typedef ParagraphImageGenerator = Uint8List Function();
 
 /// Resizes the global paint canvas to the given width and height and updates the device pixel ratio.
 ///
-/// The paint canvas is scaled by the device pixel ratio to avoid pixelation
-/// that would happen if it wasn't resized.
-void _resizePaintCanvas(double devicePixelRatio, ui.Rect rect) {
+/// The paint canvas is scaled by the device pixel ratio and canvas matrix scale to avoid pixelation.
+void _resizePaintCanvas(double devicePixelRatio, ui.Rect rect, Float64List? canvasTransform) {
+  final double scaleX = canvasTransform != null
+      ? math.sqrt(canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1])
+      : 1.0;
+  final double scaleY = canvasTransform != null
+      ? math.sqrt(canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5])
+      : 1.0;
+
+  final double effectiveDprX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
+  final double effectiveDprY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
+
   _paintCanvas.width = rect.width.ceil();
   _paintCanvas.height = rect.height.ceil();
-  _paintContext.scale(devicePixelRatio, devicePixelRatio);
+  _paintContext.scale(effectiveDprX, effectiveDprY);
 }
 
 /// Calculates the source (on Canvas2D) and target (on the output canvas) rectangles for a text block.
@@ -55,27 +65,44 @@ double _calculateShift(double minShift, double targetFrac) {
 }
 
 @visibleForTesting
-(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) calculateParagraphForTest(
+(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift, double scaleX, double scaleY)
+calculateParagraphForTest(
   WebParagraph paragraph,
   ui.Offset offset,
-  double devicePixelRatio,
-) => _calculateParagraph(paragraph, offset, devicePixelRatio);
+  double devicePixelRatio, [
+  Float64List? canvasTransform,
+]) => _calculateParagraph(paragraph, offset, devicePixelRatio, canvasTransform);
 
 /// Calculates the source (on Canvas2D) and target (on the output canvas) rectangles for the entire paragraph,
 /// as well as the translation shift on Canvas2D.
-(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) _calculateParagraph(
+(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift, double scaleX, double scaleY)
+_calculateParagraph(
   WebParagraph paragraph,
   ui.Offset offset,
-  double devicePixelRatio,
-) {
-  // Convert offset and paintBounds to physical device pixel space
-  final double physicalOffsetX = offset.dx * devicePixelRatio;
-  final double physicalOffsetY = offset.dy * devicePixelRatio;
+  double devicePixelRatio, [
+  Float64List? canvasTransform,
+]) {
+  final double transformX = canvasTransform != null ? canvasTransform[12] : 0.0;
+  final double transformY = canvasTransform != null ? canvasTransform[13] : 0.0;
+
+  final double scaleX = canvasTransform != null
+      ? math.sqrt(canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1])
+      : 1.0;
+  final double scaleY = canvasTransform != null
+      ? math.sqrt(canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5])
+      : 1.0;
+
+  final double effectiveDprX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
+  final double effectiveDprY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
+
+  // Convert effective offset and paintBounds to physical device pixel space using effective DPR
+  final double physicalOffsetX = (offset.dx + transformX) * effectiveDprX;
+  final double physicalOffsetY = (offset.dy + transformY) * effectiveDprY;
   final physicalPaintBounds = ui.Rect.fromLTRB(
-    paragraph.paintBounds.left * devicePixelRatio,
-    paragraph.paintBounds.top * devicePixelRatio,
-    paragraph.paintBounds.right * devicePixelRatio,
-    paragraph.paintBounds.bottom * devicePixelRatio,
+    paragraph.paintBounds.left * effectiveDprX,
+    paragraph.paintBounds.top * effectiveDprY,
+    paragraph.paintBounds.right * effectiveDprX,
+    paragraph.paintBounds.bottom * effectiveDprY,
   );
 
   // Match horizontal and vertical subpixel phase in physical device pixels
@@ -94,25 +121,22 @@ double _calculateShift(double minShift, double targetFrac) {
   final double physicalHeight = (shiftPhysicalY + physicalPaintBounds.bottom + kAntialiasingPadding)
       .ceilToDouble();
 
-  // Source rect in physical device pixels
+  // Source rect in physical device pixels (rasterized at effective DPR)
   final sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
 
-  // Target rect in physical device pixels:
-  // targetLeft and targetTop are guaranteed to be exact integers in physical device pixels
+  // Target rect in local canvas units:
+  // (targetLeft + transformX) * effectiveDprX is guaranteed to be an exact integer in physical device pixels
   final targetRect = ui.Rect.fromLTWH(
-    physicalOffsetX - shiftPhysicalX,
-    physicalOffsetY - shiftPhysicalY,
-    physicalWidth,
-    physicalHeight,
+    (physicalOffsetX - shiftPhysicalX) / effectiveDprX - transformX,
+    (physicalOffsetY - shiftPhysicalY) / effectiveDprY - transformY,
+    physicalWidth / effectiveDprX,
+    physicalHeight / effectiveDprY,
   );
 
   // Convert shift to logical units for Canvas2D context translation
-  final canvas2dShift = ui.Offset(
-    shiftPhysicalX / devicePixelRatio,
-    shiftPhysicalY / devicePixelRatio,
-  );
+  final canvas2dShift = ui.Offset(shiftPhysicalX / effectiveDprX, shiftPhysicalY / effectiveDprY);
 
-  return (sourceRect, targetRect, canvas2dShift);
+  return (sourceRect, targetRect, canvas2dShift, scaleX, scaleY);
 }
 
 /// Paints a [WebParagraph].
@@ -189,10 +213,17 @@ abstract class WebParagraphPainter {
 
     final TextLayout layout = _paragraph.getLayout();
 
-    final (ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) = _calculateParagraph(
+    final (
+      ui.Rect sourceRect,
+      ui.Rect targetRect,
+      ui.Offset canvas2dShift,
+      double scaleX,
+      double scaleY,
+    ) = _calculateParagraph(
       _paragraph,
       offset,
       ui.window.devicePixelRatio,
+      canvas.getTransform(),
     );
 
     const epsilon = 0.001;
@@ -209,8 +240,11 @@ abstract class WebParagraphPainter {
       canvas,
       sourceRect,
       targetRect,
+      canvas2dShift: canvas2dShift,
+      scaleX: scaleX,
+      scaleY: scaleY,
       generateParagraphImage: () {
-        _resizePaintCanvas(ui.window.devicePixelRatio, sourceRect);
+        _resizePaintCanvas(ui.window.devicePixelRatio, sourceRect, canvas.getTransform());
 
         // We translate Canvas2D context by canvas2dShift in logical units
         _paintContext.translate(canvas2dShift.dx, canvas2dShift.dy);
@@ -239,6 +273,9 @@ abstract class WebParagraphPainter {
     ui.Rect sourceRect,
     ui.Rect targetRect, {
     required ParagraphImageGenerator generateParagraphImage,
+    required ui.Offset canvas2dShift,
+    required double scaleX,
+    required double scaleY,
   });
 }
 

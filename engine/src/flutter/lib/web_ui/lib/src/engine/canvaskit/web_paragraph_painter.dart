@@ -11,10 +11,37 @@ import '../web_paragraph/painter.dart';
 import 'canvaskit_api.dart';
 import 'image.dart';
 
+class _ParagraphCacheKey {
+  const _ParagraphCacheKey({
+    required this.devicePixelRatio,
+    required this.scaleX,
+    required this.scaleY,
+    required this.canvas2dShift,
+  });
+
+  final double devicePixelRatio;
+  final double scaleX;
+  final double scaleY;
+  final ui.Offset canvas2dShift;
+
+  bool matches({
+    required double devicePixelRatio,
+    required double scaleX,
+    required double scaleY,
+    required ui.Offset canvas2dShift,
+  }) {
+    return this.devicePixelRatio == devicePixelRatio &&
+        this.scaleX == scaleX &&
+        this.scaleY == scaleY &&
+        this.canvas2dShift == canvas2dShift;
+  }
+}
+
 class CanvasKitPainter extends WebParagraphPainter {
   CanvasKitPainter(super.paragraph);
 
   EngineImage? _singleImageCache;
+  _ParagraphCacheKey? _lastCacheKey;
 
   @override
   bool get hasCache => _singleImageCache != null;
@@ -23,9 +50,8 @@ class CanvasKitPainter extends WebParagraphPainter {
   void clearCache() {
     _singleImageCache?.dispose();
     _singleImageCache = null;
+    _lastCacheKey = null;
   }
-
-  double? _lastDevicePixelRatio;
 
   @override
   void paintParagraphText(
@@ -33,12 +59,26 @@ class CanvasKitPainter extends WebParagraphPainter {
     ui.Rect sourceRect,
     ui.Rect targetRect, {
     required ParagraphImageGenerator generateParagraphImage,
+    required ui.Offset canvas2dShift,
+    required double scaleX,
+    required double scaleY,
   }) {
     final double dpr = ui.window.devicePixelRatio;
-    if (_lastDevicePixelRatio != dpr) {
+    if (_lastCacheKey == null ||
+        !_lastCacheKey!.matches(
+          devicePixelRatio: dpr,
+          scaleX: scaleX,
+          scaleY: scaleY,
+          canvas2dShift: canvas2dShift,
+        )) {
       clearCache();
+      _lastCacheKey = _ParagraphCacheKey(
+        devicePixelRatio: dpr,
+        scaleX: scaleX,
+        scaleY: scaleY,
+        canvas2dShift: canvas2dShift,
+      );
     }
-    _lastDevicePixelRatio = dpr;
 
     if (!hasCache) {
       final imageInfo = SkImageInfo(
@@ -65,14 +105,11 @@ class CanvasKitPainter extends WebParagraphPainter {
       );
     }
 
-    canvas.save();
-    canvas.scale(1 / dpr, 1 / dpr);
     canvas.drawImageRect(
       _singleImageCache!,
       sourceRect,
       targetRect,
       ui.Paint()..filterQuality = ui.FilterQuality.none,
     );
-    canvas.restore();
   }
 }

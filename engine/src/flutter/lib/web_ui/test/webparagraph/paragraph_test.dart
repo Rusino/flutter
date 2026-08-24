@@ -1320,35 +1320,32 @@ Future<void> testMain() async {
         final WebParagraph paragraph = builder.build();
         paragraph.layout(const ParagraphConstraints(width: double.infinity));
 
-        final mockCanvas = _MockCanvas();
         const offset = Offset(10.25, 20.75); // Subpixel offset in logical coordinates
-        paragraph.paint(mockCanvas, offset);
-
-        final Rect? sourceRect = mockCanvas.lastSourceRect;
-        final Rect? targetRect = mockCanvas.lastTargetRect;
-
-        expect(sourceRect, isNotNull);
-        expect(targetRect, isNotNull);
-
-        // Verify sourceRect dimensions are exact integers in physical pixels
-        expect(sourceRect!.width % 1.0, 0.0);
-        expect(sourceRect.height % 1.0, 0.0);
-
-        // Verify targetRect has 1:1 physical pixel dimensions matching sourceRect
-        expect(targetRect!.width, sourceRect.width);
-        expect(targetRect.height, sourceRect.height);
-
-        // Verify targetRect.left and targetRect.top are exact integers in physical device pixels
-        expect(targetRect.left % 1.0, 0.0);
-        expect(targetRect.top % 1.0, 0.0);
 
         // Verify that 2D subpixel fractional phases on Canvas2D (source) match target offset fractional phases
-        final (Rect, Rect, Offset) paragraphInfo = calculateParagraphForTest(
+        final (
+          Rect sourceRect,
+          Rect targetRect,
+          Offset canvas2dShift,
+          double scaleX,
+          double scaleY,
+        ) = calculateParagraphForTest(
           paragraph,
           offset,
           dpr,
         );
-        final Offset canvas2dShift = paragraphInfo.$3;
+
+        // Verify sourceRect dimensions are exact integers in physical pixels
+        expect(sourceRect.width % 1.0, 0.0);
+        expect(sourceRect.height % 1.0, 0.0);
+
+        // Verify targetRect in logical units matches sourceRect physical dimensions when scaled by dpr
+        expect(targetRect.width * dpr, closeTo(sourceRect.width, 1e-5));
+        expect(targetRect.height * dpr, closeTo(sourceRect.height, 1e-5));
+
+        // Verify targetRect.left and targetRect.top when converted to physical device pixels are exact integers
+        expect((targetRect.left * dpr).roundToDouble(), closeTo(targetRect.left * dpr, 1e-5));
+        expect((targetRect.top * dpr).roundToDouble(), closeTo(targetRect.top * dpr, 1e-5));
 
         final double targetPhysicalX = offset.dx * dpr;
         final double targetFracX = targetPhysicalX - targetPhysicalX.floorToDouble();
@@ -1361,54 +1358,9 @@ Future<void> testMain() async {
         final double sourcePhysicalShiftY = canvas2dShift.dy * dpr;
         final double sourceFracY = sourcePhysicalShiftY - sourcePhysicalShiftY.floorToDouble();
         expect(sourceFracY, closeTo(targetFracY, 0.0001));
-
-        // Verify canvas scale is reset to 1/dpr around drawImageRect
-        expect(
-          mockCanvas.log,
-          containsAllInOrder(<String>[
-            'save',
-            'scale(${1 / dpr}, ${1 / dpr})',
-            'drawImageRect',
-            'restore',
-          ]),
-        );
       }
     } finally {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
     }
   });
-}
-
-class _MockCanvas implements Canvas {
-  Rect? lastSourceRect;
-  Rect? lastTargetRect;
-  final List<String> log = <String>[];
-
-  @override
-  void save() {
-    log.add('save');
-  }
-
-  @override
-  void scale(double sx, [double? sy]) {
-    log.add('scale($sx, ${sy ?? sx})');
-  }
-
-  @override
-  void drawImageRect(Image image, Rect src, Rect dst, Paint paint) {
-    log.add('drawImageRect');
-    lastSourceRect = src;
-    lastTargetRect = dst;
-  }
-
-  @override
-  void restore() {
-    log.add('restore');
-  }
-
-  @override
-  void drawRect(Rect rect, Paint paint) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
 }
