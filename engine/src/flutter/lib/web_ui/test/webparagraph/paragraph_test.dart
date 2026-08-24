@@ -1313,15 +1313,15 @@ Future<void> testMain() async {
       for (final dpr in <double>[1.0, 1.5, 2.0, 2.5]) {
         EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(dpr);
 
-        final WebParagraphStyle arialStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 50);
-        final WebParagraphBuilder builder = WebParagraphBuilder(arialStyle);
+        final arialStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 50);
+        final builder = WebParagraphBuilder(arialStyle);
         builder.pushStyle(WebTextStyle(color: const Color(0xFF000000)));
         builder.addText('Subpixel aligned text');
         final WebParagraph paragraph = builder.build();
         paragraph.layout(const ParagraphConstraints(width: double.infinity));
 
         final mockCanvas = _MockCanvas();
-        final Offset offset = Offset(10.25, 20.75); // Subpixel offset in logical coordinates
+        const offset = Offset(10.25, 20.75); // Subpixel offset in logical coordinates
         paragraph.paint(mockCanvas, offset);
 
         final Rect? sourceRect = mockCanvas.lastSourceRect;

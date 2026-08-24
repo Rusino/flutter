@@ -71,7 +71,7 @@ double _calculateShift(double minShift, double targetFrac) {
   // Convert offset and paintBounds to physical device pixel space
   final double physicalOffsetX = offset.dx * devicePixelRatio;
   final double physicalOffsetY = offset.dy * devicePixelRatio;
-  final ui.Rect physicalPaintBounds = ui.Rect.fromLTRB(
+  final physicalPaintBounds = ui.Rect.fromLTRB(
     paragraph.paintBounds.left * devicePixelRatio,
     paragraph.paintBounds.top * devicePixelRatio,
     paragraph.paintBounds.right * devicePixelRatio,
@@ -87,15 +87,19 @@ double _calculateShift(double minShift, double targetFrac) {
   final double minShiftY = -physicalPaintBounds.top;
   final double shiftPhysicalY = _calculateShift(minShiftY, targetFracY);
 
-  final double physicalWidth = (shiftPhysicalX + physicalPaintBounds.right).ceilToDouble();
-  final double physicalHeight = (shiftPhysicalY + physicalPaintBounds.bottom).ceilToDouble();
+  // Add 2 physical pixels of safety padding so font antialiasing bleeding at the bottom/right edges is not clipped
+  const kAntialiasingPadding = 2.0;
+  final double physicalWidth = (shiftPhysicalX + physicalPaintBounds.right + kAntialiasingPadding)
+      .ceilToDouble();
+  final double physicalHeight = (shiftPhysicalY + physicalPaintBounds.bottom + kAntialiasingPadding)
+      .ceilToDouble();
 
   // Source rect in physical device pixels
-  final ui.Rect sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
+  final sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
 
   // Target rect in physical device pixels:
   // targetLeft and targetTop are guaranteed to be exact integers in physical device pixels
-  final ui.Rect targetRect = ui.Rect.fromLTWH(
+  final targetRect = ui.Rect.fromLTWH(
     physicalOffsetX - shiftPhysicalX,
     physicalOffsetY - shiftPhysicalY,
     physicalWidth,
@@ -103,7 +107,7 @@ double _calculateShift(double minShift, double targetFrac) {
   );
 
   // Convert shift to logical units for Canvas2D context translation
-  final ui.Offset canvas2dShift = ui.Offset(
+  final canvas2dShift = ui.Offset(
     shiftPhysicalX / devicePixelRatio,
     shiftPhysicalY / devicePixelRatio,
   );
