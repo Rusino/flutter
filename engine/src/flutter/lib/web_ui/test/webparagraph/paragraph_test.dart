@@ -1313,15 +1313,15 @@ Future<void> testMain() async {
       for (final dpr in <double>[1.0, 1.5, 2.0, 2.5]) {
         EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(dpr);
 
-        final arialStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 50);
-        final builder = WebParagraphBuilder(arialStyle);
+        final WebParagraphStyle arialStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 50);
+        final WebParagraphBuilder builder = WebParagraphBuilder(arialStyle);
         builder.pushStyle(WebTextStyle(color: const Color(0xFF000000)));
         builder.addText('Subpixel aligned text');
         final WebParagraph paragraph = builder.build();
         paragraph.layout(const ParagraphConstraints(width: double.infinity));
 
         final mockCanvas = _MockCanvas();
-        const offset = Offset(10.25, 20.75); // Subpixel offset in logical coordinates
+        final Offset offset = Offset(10.25, 20.75); // Subpixel offset in logical coordinates
         paragraph.paint(mockCanvas, offset);
 
         final Rect? sourceRect = mockCanvas.lastSourceRect;
@@ -1338,21 +1338,29 @@ Future<void> testMain() async {
         expect(targetRect!.width, sourceRect.width);
         expect(targetRect.height, sourceRect.height);
 
-        // Verify targetRect.left is an exact integer in physical device pixels
+        // Verify targetRect.left and targetRect.top are exact integers in physical device pixels
         expect(targetRect.left % 1.0, 0.0);
+        expect(targetRect.top % 1.0, 0.0);
 
-        // Verify that the horizontal subpixel fractional phase on Canvas2D (source) matches target offset fractional phase
+        // Verify that 2D subpixel fractional phases on Canvas2D (source) match target offset fractional phases
         final (Rect, Rect, Offset) paragraphInfo = calculateParagraphForTest(
           paragraph,
           offset,
           dpr,
         );
         final Offset canvas2dShift = paragraphInfo.$3;
+
         final double targetPhysicalX = offset.dx * dpr;
         final double targetFracX = targetPhysicalX - targetPhysicalX.floorToDouble();
         final double sourcePhysicalShiftX = canvas2dShift.dx * dpr;
         final double sourceFracX = sourcePhysicalShiftX - sourcePhysicalShiftX.floorToDouble();
         expect(sourceFracX, closeTo(targetFracX, 0.0001));
+
+        final double targetPhysicalY = offset.dy * dpr;
+        final double targetFracY = targetPhysicalY - targetPhysicalY.floorToDouble();
+        final double sourcePhysicalShiftY = canvas2dShift.dy * dpr;
+        final double sourceFracY = sourcePhysicalShiftY - sourcePhysicalShiftY.floorToDouble();
+        expect(sourceFracY, closeTo(targetFracY, 0.0001));
 
         // Verify canvas scale is reset to 1/dpr around drawImageRect
         expect(

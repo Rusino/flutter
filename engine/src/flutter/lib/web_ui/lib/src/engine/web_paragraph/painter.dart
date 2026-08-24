@@ -71,36 +71,39 @@ double _calculateShift(double minShift, double targetFrac) {
   // Convert offset and paintBounds to physical device pixel space
   final double physicalOffsetX = offset.dx * devicePixelRatio;
   final double physicalOffsetY = offset.dy * devicePixelRatio;
-  final physicalPaintBounds = ui.Rect.fromLTRB(
+  final ui.Rect physicalPaintBounds = ui.Rect.fromLTRB(
     paragraph.paintBounds.left * devicePixelRatio,
     paragraph.paintBounds.top * devicePixelRatio,
     paragraph.paintBounds.right * devicePixelRatio,
     paragraph.paintBounds.bottom * devicePixelRatio,
   );
 
-  // Match horizontal subpixel phase in physical device pixels
+  // Match horizontal and vertical subpixel phase in physical device pixels
   final double targetFracX = physicalOffsetX - physicalOffsetX.floorToDouble();
   final double minShiftX = -physicalPaintBounds.left;
   final double shiftPhysicalX = _calculateShift(minShiftX, targetFracX);
-  final double shiftPhysicalY = -physicalPaintBounds.top;
+
+  final double targetFracY = physicalOffsetY - physicalOffsetY.floorToDouble();
+  final double minShiftY = -physicalPaintBounds.top;
+  final double shiftPhysicalY = _calculateShift(minShiftY, targetFracY);
 
   final double physicalWidth = (shiftPhysicalX + physicalPaintBounds.right).ceilToDouble();
-  final double physicalHeight = physicalPaintBounds.height.ceilToDouble();
+  final double physicalHeight = (shiftPhysicalY + physicalPaintBounds.bottom).ceilToDouble();
 
   // Source rect in physical device pixels
-  final sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
+  final ui.Rect sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
 
   // Target rect in physical device pixels:
-  // targetLeft is guaranteed to be an exact integer in physical device pixels
-  final targetRect = ui.Rect.fromLTWH(
+  // targetLeft and targetTop are guaranteed to be exact integers in physical device pixels
+  final ui.Rect targetRect = ui.Rect.fromLTWH(
     physicalOffsetX - shiftPhysicalX,
-    physicalOffsetY + physicalPaintBounds.top,
+    physicalOffsetY - shiftPhysicalY,
     physicalWidth,
     physicalHeight,
   );
 
   // Convert shift to logical units for Canvas2D context translation
-  final canvas2dShift = ui.Offset(
+  final ui.Offset canvas2dShift = ui.Offset(
     shiftPhysicalX / devicePixelRatio,
     shiftPhysicalY / devicePixelRatio,
   );
