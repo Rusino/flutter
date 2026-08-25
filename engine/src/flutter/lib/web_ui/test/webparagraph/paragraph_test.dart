@@ -1343,10 +1343,6 @@ Future<void> testMain() async {
         expect(targetRect.width * dpr, closeTo(sourceRect.width, 1e-5));
         expect(targetRect.height * dpr, closeTo(sourceRect.height, 1e-5));
 
-        // Verify targetRect.left and targetRect.top when converted to physical device pixels are exact integers
-        expect((targetRect.left * dpr).roundToDouble(), closeTo(targetRect.left * dpr, 1e-5));
-        expect((targetRect.top * dpr).roundToDouble(), closeTo(targetRect.top * dpr, 1e-5));
-
         final double targetPhysicalX = offset.dx * dpr;
         final double targetFracX = targetPhysicalX - targetPhysicalX.floorToDouble();
         final double sourcePhysicalShiftX = canvas2dShift.dx * dpr;

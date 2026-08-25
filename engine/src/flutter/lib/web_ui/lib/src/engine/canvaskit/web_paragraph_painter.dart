@@ -16,24 +16,16 @@ class _ParagraphCacheKey {
     required this.devicePixelRatio,
     required this.scaleX,
     required this.scaleY,
-    required this.canvas2dShift,
   });
 
   final double devicePixelRatio;
   final double scaleX;
   final double scaleY;
-  final ui.Offset canvas2dShift;
 
-  bool matches({
-    required double devicePixelRatio,
-    required double scaleX,
-    required double scaleY,
-    required ui.Offset canvas2dShift,
-  }) {
+  bool matches({required double devicePixelRatio, required double scaleX, required double scaleY}) {
     return this.devicePixelRatio == devicePixelRatio &&
         this.scaleX == scaleX &&
-        this.scaleY == scaleY &&
-        this.canvas2dShift == canvas2dShift;
+        this.scaleY == scaleY;
   }
 }
 
@@ -65,19 +57,9 @@ class CanvasKitPainter extends WebParagraphPainter {
   }) {
     final double dpr = ui.window.devicePixelRatio;
     if (_lastCacheKey == null ||
-        !_lastCacheKey!.matches(
-          devicePixelRatio: dpr,
-          scaleX: scaleX,
-          scaleY: scaleY,
-          canvas2dShift: canvas2dShift,
-        )) {
+        !_lastCacheKey!.matches(devicePixelRatio: dpr, scaleX: scaleX, scaleY: scaleY)) {
       clearCache();
-      _lastCacheKey = _ParagraphCacheKey(
-        devicePixelRatio: dpr,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        canvas2dShift: canvas2dShift,
-      );
+      _lastCacheKey = _ParagraphCacheKey(devicePixelRatio: dpr, scaleX: scaleX, scaleY: scaleY);
     }
 
     if (!hasCache) {

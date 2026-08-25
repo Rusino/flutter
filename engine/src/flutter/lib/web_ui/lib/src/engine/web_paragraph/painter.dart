@@ -95,9 +95,9 @@ _calculateParagraph(
   final double effectiveDprX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
   final double effectiveDprY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
 
-  // Convert effective offset and paintBounds to physical device pixel space using effective DPR
-  final double physicalOffsetX = (offset.dx + transformX) * effectiveDprX;
-  final double physicalOffsetY = (offset.dy + transformY) * effectiveDprY;
+  // Convert physical offset: transformX/Y are in logical screen space (scale by devicePixelRatio, not effectiveDpr)
+  final double physicalOffsetX = offset.dx * effectiveDprX + transformX * devicePixelRatio;
+  final double physicalOffsetY = offset.dy * effectiveDprY + transformY * devicePixelRatio;
   final physicalPaintBounds = ui.Rect.fromLTRB(
     paragraph.paintBounds.left * effectiveDprX,
     paragraph.paintBounds.top * effectiveDprY,
@@ -125,10 +125,10 @@ _calculateParagraph(
   final sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
 
   // Target rect in local canvas units:
-  // (targetLeft + transformX) * effectiveDprX is guaranteed to be an exact integer in physical device pixels
+  // transformX/Y must be divided by scaleX/Y to convert back to local canvas coordinates
   final targetRect = ui.Rect.fromLTWH(
-    (physicalOffsetX - shiftPhysicalX) / effectiveDprX - transformX,
-    (physicalOffsetY - shiftPhysicalY) / effectiveDprY - transformY,
+    (physicalOffsetX - shiftPhysicalX) / effectiveDprX - (scaleX > 0 ? transformX / scaleX : 0.0),
+    (physicalOffsetY - shiftPhysicalY) / effectiveDprY - (scaleY > 0 ? scaleY : 0.0),
     physicalWidth / effectiveDprX,
     physicalHeight / effectiveDprY,
   );
