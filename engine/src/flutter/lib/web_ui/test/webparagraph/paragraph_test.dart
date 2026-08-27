@@ -1417,4 +1417,46 @@ Future<void> testMain() async {
     final double sourceFracY = sourcePhysicalShiftY - sourcePhysicalShiftY.floorToDouble();
     expect(sourceFracY, closeTo(targetFracY, 0.0001));
   });
+
+  test('WebParagraphPainter dual-mode cache policy for static vs scrolling text', () async {
+    final builder = ParagraphBuilder(ParagraphStyle(fontFamily: 'Roboto', fontSize: 16));
+    builder.addText('Dual-mode Caching Test');
+    final paragraph = builder.build() as WebParagraph;
+    paragraph.layout(const ParagraphConstraints(width: 300));
+
+    final painter = CanvasKitPainter(paragraph);
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder, region);
+
+    // 1. Initial paint at static offset A (10.1, 20.1) -> Rasterize #1
+    painter.paint(canvas, const Offset(10.1, 20.1));
+    expect(painter.hasCache, isTrue);
+    expect(painter.debugRasterizeCount, 1);
+
+    // 2. Re-paint at same static offset A: cache is reused -> Rasterize count stays 1
+    painter.paint(canvas, const Offset(10.1, 20.1));
+    expect(painter.hasCache, isTrue);
+    expect(painter.debugRasterizeCount, 1);
+
+    // 3. Static settlement at a different offset B (10.8, 20.8) with different subpixel shift:
+    // Frame 1 at offset B: motion transition from offset A.
+    painter.paint(canvas, const Offset(10.8, 20.8));
+    expect(painter.hasCache, isTrue);
+
+    // Frame 2 settled at offset B (delta == 0, static mode):
+    // Strict cache matching detects canvas2dShift_A != canvas2dShift_B.
+    // The painter clears the old cache entry and re-rasterizes once for 100% crisp static text -> Rasterize #2
+    painter.paint(canvas, const Offset(10.8, 20.8));
+    expect(painter.hasCache, isTrue);
+    expect(painter.debugRasterizeCount, 2);
+
+    // 4. Simulate active scrolling: frame 1 at Offset(100.1, 200.1), then frame 2 at Offset(100.1, 203.4)
+    painter.paint(canvas, const Offset(100.1, 200.1));
+
+    // Frame 2 of continuous scrolling: position delta > 0.001 (active scrolling mode).
+    // Loose cache matching prevents cache invalidation -> Rasterize count stays 2
+    painter.paint(canvas, const Offset(100.1, 203.4));
+    expect(painter.hasCache, isTrue);
+    expect(painter.debugRasterizeCount, 2);
+  });
 }
