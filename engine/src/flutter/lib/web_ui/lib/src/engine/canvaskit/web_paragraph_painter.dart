@@ -11,38 +11,40 @@ import '../web_paragraph/painter.dart';
 import 'canvaskit_api.dart';
 import 'image.dart';
 
-class _ParagraphCacheKey {
-  const _ParagraphCacheKey({
-    required this.devicePixelRatio,
-    required this.scaleX,
-    required this.scaleY,
+/// Represents a cached rasterized paragraph image along with the effective scale
+/// (combining device pixel ratio and canvas matrix scale) it was rendered at.
+class _ParagraphCacheEntry {
+  _ParagraphCacheEntry({
+    required this.image,
+    required this.effectiveScaleX,
+    required this.effectiveScaleY,
   });
 
-  final double devicePixelRatio;
-  final double scaleX;
-  final double scaleY;
+  static const double _scaleEpsilon = 0.001;
 
-  bool matches({required double devicePixelRatio, required double scaleX, required double scaleY}) {
-    return this.devicePixelRatio == devicePixelRatio &&
-        this.scaleX == scaleX &&
-        this.scaleY == scaleY;
+  final EngineImage image;
+  final double effectiveScaleX;
+  final double effectiveScaleY;
+
+  /// Checks if the cached image scale matches the requested effective scales within [_scaleEpsilon].
+  bool matchesScale({required double effectiveScaleX, required double effectiveScaleY}) {
+    return (this.effectiveScaleX - effectiveScaleX).abs() < _scaleEpsilon &&
+        (this.effectiveScaleY - effectiveScaleY).abs() < _scaleEpsilon;
   }
 }
 
 class CanvasKitPainter extends WebParagraphPainter {
   CanvasKitPainter(super.paragraph);
 
-  EngineImage? _singleImageCache;
-  _ParagraphCacheKey? _lastCacheKey;
+  _ParagraphCacheEntry? _cacheEntry;
 
   @override
-  bool get hasCache => _singleImageCache != null;
+  bool get hasCache => _cacheEntry != null;
 
   @override
   void clearCache() {
-    _singleImageCache?.dispose();
-    _singleImageCache = null;
-    _lastCacheKey = null;
+    _cacheEntry?.image.dispose();
+    _cacheEntry = null;
   }
 
   @override
@@ -51,15 +53,16 @@ class CanvasKitPainter extends WebParagraphPainter {
     ui.Rect sourceRect,
     ui.Rect targetRect, {
     required ParagraphImageGenerator generateParagraphImage,
-    required ui.Offset canvas2dShift,
-    required double scaleX,
-    required double scaleY,
+    required double effectiveScaleX,
+    required double effectiveScaleY,
   }) {
-    final double dpr = ui.window.devicePixelRatio;
-    if (_lastCacheKey == null ||
-        !_lastCacheKey!.matches(devicePixelRatio: dpr, scaleX: scaleX, scaleY: scaleY)) {
+    // Invalidate the cache if the effective scale (DPR * canvas matrix scale) has changed.
+    if (_cacheEntry != null &&
+        !_cacheEntry!.matchesScale(
+          effectiveScaleX: effectiveScaleX,
+          effectiveScaleY: effectiveScaleY,
+        )) {
       clearCache();
-      _lastCacheKey = _ParagraphCacheKey(devicePixelRatio: dpr, scaleX: scaleX, scaleY: scaleY);
     }
 
     if (!hasCache) {
@@ -80,15 +83,19 @@ class CanvasKitPainter extends WebParagraphPainter {
       if (skImage == null) {
         throw Exception('Failed to convert text image bitmap to an SkImage.');
       }
-      _singleImageCache = EngineImage(
-        CkImageDelegate(skImage),
-        skImage.width().toInt(),
-        skImage.height().toInt(),
+      _cacheEntry = _ParagraphCacheEntry(
+        image: EngineImage(
+          CkImageDelegate(skImage),
+          skImage.width().toInt(),
+          skImage.height().toInt(),
+        ),
+        effectiveScaleX: effectiveScaleX,
+        effectiveScaleY: effectiveScaleY,
       );
     }
 
     canvas.drawImageRect(
-      _singleImageCache!,
+      _cacheEntry!.image,
       sourceRect,
       targetRect,
       ui.Paint()..filterQuality = ui.FilterQuality.none,

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
@@ -1323,13 +1324,7 @@ Future<void> testMain() async {
         const offset = Offset(10.25, 20.75); // Subpixel offset in logical coordinates
 
         // Verify that 2D subpixel fractional phases on Canvas2D (source) match target offset fractional phases
-        final (
-          Rect sourceRect,
-          Rect targetRect,
-          Offset canvas2dShift,
-          double scaleX,
-          double scaleY,
-        ) = calculateParagraphForTest(
+        final (Rect sourceRect, Rect targetRect, Offset canvas2dShift) = calculateParagraphForTest(
           paragraph,
           offset,
           dpr,
@@ -1358,5 +1353,68 @@ Future<void> testMain() async {
     } finally {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
     }
+  });
+
+  test('WebParagraph calculateParagraph with transform scales and translations', () {
+    const dpr = 2.0;
+    final arialStyle = WebParagraphStyle(fontFamily: 'Arial', fontSize: 20);
+    final builder = WebParagraphBuilder(arialStyle);
+    builder.pushStyle(WebTextStyle(color: const Color(0xFF000000)));
+    builder.addText('Test scaling and translation');
+    final WebParagraph paragraph = builder.build();
+    paragraph.layout(const ParagraphConstraints(width: 200));
+
+    const offset = Offset(10.0, 20.0);
+
+    // Matrix with scale 1.5x, 2.0y and translation (30.0, 40.0)
+    final transform = Float64List.fromList(<double>[
+      1.5,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      2.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      30.0,
+      40.0,
+      0.0,
+      1.0,
+    ]);
+
+    final (Rect sourceRect, Rect targetRect, Offset canvas2dShift) = calculateParagraphForTest(
+      paragraph,
+      offset,
+      dpr,
+      transform,
+    );
+
+    const double effectiveScaleX = dpr * 1.5;
+    const double effectiveScaleY = dpr * 2.0;
+
+    // Verify sourceRect dimensions are exact integers in physical pixels
+    expect(sourceRect.width % 1.0, 0.0);
+    expect(sourceRect.height % 1.0, 0.0);
+
+    // Verify targetRect logical size corresponds to sourceRect / effectiveScale
+    expect(targetRect.width * effectiveScaleX, closeTo(sourceRect.width, 1e-5));
+    expect(targetRect.height * effectiveScaleY, closeTo(sourceRect.height, 1e-5));
+
+    // Verify physical subpixel alignment with translation taken into account
+    final double physicalOffsetX = offset.dx * effectiveScaleX + 30.0 * dpr;
+    final double targetFracX = physicalOffsetX - physicalOffsetX.floorToDouble();
+    final double sourcePhysicalShiftX = canvas2dShift.dx * effectiveScaleX;
+    final double sourceFracX = sourcePhysicalShiftX - sourcePhysicalShiftX.floorToDouble();
+    expect(sourceFracX, closeTo(targetFracX, 0.0001));
+
+    final double physicalOffsetY = offset.dy * effectiveScaleY + 40.0 * dpr;
+    final double targetFracY = physicalOffsetY - physicalOffsetY.floorToDouble();
+    final double sourcePhysicalShiftY = canvas2dShift.dy * effectiveScaleY;
+    final double sourceFracY = sourcePhysicalShiftY - sourcePhysicalShiftY.floorToDouble();
+    expect(sourceFracY, closeTo(targetFracY, 0.0001));
   });
 }

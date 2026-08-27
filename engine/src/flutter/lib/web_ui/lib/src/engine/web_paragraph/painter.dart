@@ -23,20 +23,13 @@ typedef ParagraphImageGenerator = Uint8List Function();
 /// Resizes the global paint canvas to the given width and height and updates the device pixel ratio.
 ///
 /// The paint canvas is scaled by the device pixel ratio and canvas matrix scale to avoid pixelation.
-void _resizePaintCanvas(double devicePixelRatio, ui.Rect rect, Float64List? canvasTransform) {
-  final double scaleX = canvasTransform != null
-      ? math.sqrt(canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1])
-      : 1.0;
-  final double scaleY = canvasTransform != null
-      ? math.sqrt(canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5])
-      : 1.0;
-
-  final double effectiveDprX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
-  final double effectiveDprY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
+void _resizePaintCanvas(double devicePixelRatio, ui.Rect rect, double scaleX, double scaleY) {
+  final double effectiveScaleX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
+  final double effectiveScaleY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
 
   _paintCanvas.width = rect.width.ceil();
   _paintCanvas.height = rect.height.ceil();
-  _paintContext.scale(effectiveDprX, effectiveDprY);
+  _paintContext.scale(effectiveScaleX, effectiveScaleY);
 }
 
 /// Calculates the source (on Canvas2D) and target (on the output canvas) rectangles for a text block.
@@ -65,44 +58,45 @@ double _calculateShift(double minShift, double targetFrac) {
 }
 
 @visibleForTesting
-(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift, double scaleX, double scaleY)
-calculateParagraphForTest(
-  WebParagraph paragraph,
-  ui.Offset offset,
-  double devicePixelRatio, [
-  Float64List? canvasTransform,
-]) => _calculateParagraph(paragraph, offset, devicePixelRatio, canvasTransform);
-
-/// Calculates the source (on Canvas2D) and target (on the output canvas) rectangles for the entire paragraph,
-/// as well as the translation shift on Canvas2D.
-(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift, double scaleX, double scaleY)
-_calculateParagraph(
+(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) calculateParagraphForTest(
   WebParagraph paragraph,
   ui.Offset offset,
   double devicePixelRatio, [
   Float64List? canvasTransform,
 ]) {
-  final double transformX = canvasTransform != null ? canvasTransform[12] : 0.0;
-  final double transformY = canvasTransform != null ? canvasTransform[13] : 0.0;
-
   final double scaleX = canvasTransform != null
       ? math.sqrt(canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1])
       : 1.0;
   final double scaleY = canvasTransform != null
       ? math.sqrt(canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5])
       : 1.0;
+  return _calculateParagraph(paragraph, offset, devicePixelRatio, scaleX, scaleY, canvasTransform);
+}
 
-  final double effectiveDprX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
-  final double effectiveDprY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
+/// Calculates the source (on Canvas2D) and target (on the output canvas) rectangles for the entire paragraph,
+/// as well as the translation shift on Canvas2D.
+(ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) _calculateParagraph(
+  WebParagraph paragraph,
+  ui.Offset offset,
+  double devicePixelRatio,
+  double scaleX,
+  double scaleY, [
+  Float64List? canvasTransform,
+]) {
+  final double transformX = canvasTransform != null ? canvasTransform[12] : 0.0;
+  final double transformY = canvasTransform != null ? canvasTransform[13] : 0.0;
 
-  // Convert physical offset: transformX/Y are in logical screen space (scale by devicePixelRatio, not effectiveDpr)
-  final double physicalOffsetX = offset.dx * effectiveDprX + transformX * devicePixelRatio;
-  final double physicalOffsetY = offset.dy * effectiveDprY + transformY * devicePixelRatio;
+  final double effectiveScaleX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
+  final double effectiveScaleY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
+
+  // Convert physical offset: transformX/Y are in logical screen space (scale by devicePixelRatio, not effectiveScale)
+  final double physicalOffsetX = offset.dx * effectiveScaleX + transformX * devicePixelRatio;
+  final double physicalOffsetY = offset.dy * effectiveScaleY + transformY * devicePixelRatio;
   final physicalPaintBounds = ui.Rect.fromLTRB(
-    paragraph.paintBounds.left * effectiveDprX,
-    paragraph.paintBounds.top * effectiveDprY,
-    paragraph.paintBounds.right * effectiveDprX,
-    paragraph.paintBounds.bottom * effectiveDprY,
+    paragraph.paintBounds.left * effectiveScaleX,
+    paragraph.paintBounds.top * effectiveScaleY,
+    paragraph.paintBounds.right * effectiveScaleX,
+    paragraph.paintBounds.bottom * effectiveScaleY,
   );
 
   // Match horizontal and vertical subpixel phase in physical device pixels
@@ -127,16 +121,19 @@ _calculateParagraph(
   // Target rect in local canvas units:
   // transformX/Y must be divided by scaleX/Y to convert back to local canvas coordinates
   final targetRect = ui.Rect.fromLTWH(
-    (physicalOffsetX - shiftPhysicalX) / effectiveDprX - (scaleX > 0 ? transformX / scaleX : 0.0),
-    (physicalOffsetY - shiftPhysicalY) / effectiveDprY - (scaleY > 0 ? scaleY : 0.0),
-    physicalWidth / effectiveDprX,
-    physicalHeight / effectiveDprY,
+    (physicalOffsetX - shiftPhysicalX) / effectiveScaleX - (scaleX > 0 ? transformX / scaleX : 0.0),
+    (physicalOffsetY - shiftPhysicalY) / effectiveScaleY - (scaleY > 0 ? transformY / scaleY : 0.0),
+    physicalWidth / effectiveScaleX,
+    physicalHeight / effectiveScaleY,
   );
 
   // Convert shift to logical units for Canvas2D context translation
-  final canvas2dShift = ui.Offset(shiftPhysicalX / effectiveDprX, shiftPhysicalY / effectiveDprY);
+  final canvas2dShift = ui.Offset(
+    shiftPhysicalX / effectiveScaleX,
+    shiftPhysicalY / effectiveScaleY,
+  );
 
-  return (sourceRect, targetRect, canvas2dShift, scaleX, scaleY);
+  return (sourceRect, targetRect, canvas2dShift);
 }
 
 /// Paints a [WebParagraph].
@@ -213,17 +210,23 @@ abstract class WebParagraphPainter {
 
     final TextLayout layout = _paragraph.getLayout();
 
-    final (
-      ui.Rect sourceRect,
-      ui.Rect targetRect,
-      ui.Offset canvas2dShift,
-      double scaleX,
-      double scaleY,
-    ) = _calculateParagraph(
+    // Extract canvas scaling factors upfront to pass to paragraph rect calculations and canvas resizing.
+    final Float64List canvasTransform = canvas.getTransform();
+    final double scaleX = math.sqrt(
+      canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1],
+    );
+    final double scaleY = math.sqrt(
+      canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5],
+    );
+    final double dpr = ui.window.devicePixelRatio;
+
+    final (ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) = _calculateParagraph(
       _paragraph,
       offset,
-      ui.window.devicePixelRatio,
-      canvas.getTransform(),
+      dpr,
+      scaleX,
+      scaleY,
+      canvasTransform,
     );
 
     const epsilon = 0.001;
@@ -236,15 +239,18 @@ abstract class WebParagraphPainter {
     // so it will be cached together with the text blocks on Canvas2D canvas
     _paintAllBlocks(StyleElements.background, canvas, offset);
 
+    // Effective scale combines device pixel ratio with canvas matrix scale.
+    final double effectiveScaleX = dpr * (scaleX > 0 ? scaleX : 1.0);
+    final double effectiveScaleY = dpr * (scaleY > 0 ? scaleY : 1.0);
+
     paintParagraphText(
       canvas,
       sourceRect,
       targetRect,
-      canvas2dShift: canvas2dShift,
-      scaleX: scaleX,
-      scaleY: scaleY,
+      effectiveScaleX: effectiveScaleX,
+      effectiveScaleY: effectiveScaleY,
       generateParagraphImage: () {
-        _resizePaintCanvas(ui.window.devicePixelRatio, sourceRect, canvas.getTransform());
+        _resizePaintCanvas(dpr, sourceRect, scaleX, scaleY);
 
         // We translate Canvas2D context by canvas2dShift in logical units
         _paintContext.translate(canvas2dShift.dx, canvas2dShift.dy);
@@ -273,9 +279,8 @@ abstract class WebParagraphPainter {
     ui.Rect sourceRect,
     ui.Rect targetRect, {
     required ParagraphImageGenerator generateParagraphImage,
-    required ui.Offset canvas2dShift,
-    required double scaleX,
-    required double scaleY,
+    required double effectiveScaleX,
+    required double effectiveScaleY,
   });
 }
 
