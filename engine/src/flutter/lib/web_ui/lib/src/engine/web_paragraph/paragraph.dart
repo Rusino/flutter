@@ -1100,6 +1100,12 @@ class WebParagraph implements ui.Paragraph {
 
   late final TextLayout _layout = TextLayout(this);
   late final WebParagraphPainter _painter = renderer.createWebParagraphPainter(this);
+
+  @visibleForTesting
+  WebParagraphPainter get debugPainter => _painter;
+
+  @visibleForTesting
+  int get debugRasterizeCount => _painter.debugRasterizeCount;
 }
 
 class WebLineMetrics implements ui.LineMetrics {

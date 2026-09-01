@@ -67,6 +67,7 @@ workspace:
   - examples/hello_world
   - examples/image_list
   - examples/layers
+  - examples/paragraph_cache_demo
   - examples/platform_channel
   - examples/platform_channel_swift
   - examples/platform_view

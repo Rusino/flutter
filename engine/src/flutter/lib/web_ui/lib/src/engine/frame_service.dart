@@ -55,6 +55,12 @@ class FrameService {
     _frameData = const ui.FrameData();
   }
 
+  /// Sets [frameData] with a specific frame number for testing frame sequence tracking.
+  @visibleForTesting
+  void debugSetFrameNumber(int frameNumber) {
+    _frameData = ui.FrameData(frameNumber: frameNumber);
+  }
+
   /// Whether a frame has already been scheduled.
   ///
   /// If this value is currently true, then calling [scheduleFrame] has no effect.

@@ -20,30 +20,53 @@ class _ParagraphCacheEntry {
     required this.effectiveScaleX,
     required this.effectiveScaleY,
     required this.canvas2dShift,
-  });
+  }) : binX = _subpixelPhaseBin(canvas2dShift.dx * effectiveScaleX),
+       binY = _subpixelPhaseBin(canvas2dShift.dy * effectiveScaleY);
 
-  static const double _epsilon = 0.001;
+  static const double _scaleEpsilon = 0.001;
 
   final EngineImage image;
   final double effectiveScaleX;
   final double effectiveScaleY;
   final ui.Offset canvas2dShift;
+  final int binX;
+  final int binY;
 
-  /// Checks if the cached image scale matches the requested effective scales within [_epsilon].
+  /// Checks if the cached image scale matches the requested effective scales within [_scaleEpsilon].
   bool matchesScale({required double effectiveScaleX, required double effectiveScaleY}) {
-    return (this.effectiveScaleX - effectiveScaleX).abs() < _epsilon &&
-        (this.effectiveScaleY - effectiveScaleY).abs() < _epsilon;
+    return (this.effectiveScaleX - effectiveScaleX).abs() < _scaleEpsilon &&
+        (this.effectiveScaleY - effectiveScaleY).abs() < _scaleEpsilon;
   }
 
-  /// Checks if both scale and subpixel canvas2dShift match within [_epsilon].
-  bool matches({
+  /// Quantizes the physical subpixel shift into one of 4 discrete phase bins:
+  /// - Bin 0: `[0.0, 0.25)`
+  /// - Bin 1: `[0.25, 0.50)`
+  /// - Bin 2: `[0.50, 0.75)`
+  /// - Bin 3: `[0.75, 1.00)`
+  ///
+  /// This 2-bit subpixel quantization aligns with standard font rasterizers (such as Skia and FreeType)
+  /// which bin subpixel glyph phases in 1/4 physical pixel increments.
+  static int _subpixelPhaseBin(double physicalShift) {
+    return (physicalShift * 4).floor() % 4;
+  }
+
+  /// Checks if the scale matches and both the cached and requested subpixel shifts fall into
+  /// the same discrete phase bin (`[0, 0.25)`, `[0.25, 0.5)`, `[0.5, 0.75)`, or `[0.75, 1.0)`).
+  ///
+  /// When static text moves by an integer number of physical pixels or stays within the same
+  /// 1/4-pixel bin, the cached raster image can be reused with zero loss in visual sharpness.
+  bool matchesSubpixelPhase({
     required double effectiveScaleX,
     required double effectiveScaleY,
     required ui.Offset canvas2dShift,
   }) {
-    return matchesScale(effectiveScaleX: effectiveScaleX, effectiveScaleY: effectiveScaleY) &&
-        (this.canvas2dShift.dx - canvas2dShift.dx).abs() < _epsilon &&
-        (this.canvas2dShift.dy - canvas2dShift.dy).abs() < _epsilon;
+    if (!matchesScale(effectiveScaleX: effectiveScaleX, effectiveScaleY: effectiveScaleY)) {
+      return false;
+    }
+    final int currentBinX = _subpixelPhaseBin(canvas2dShift.dx * effectiveScaleX);
+    final int currentBinY = _subpixelPhaseBin(canvas2dShift.dy * effectiveScaleY);
+
+    return binX == currentBinX && binY == currentBinY;
   }
 }
 
@@ -52,9 +75,15 @@ class CanvasKitPainter extends WebParagraphPainter {
 
   _ParagraphCacheEntry? _cacheEntry;
   ui.Offset? _lastOffset;
+  int? _lastFrameNumber;
+  bool _wasMoving = false;
 
+  @override
   @visibleForTesting
   int debugRasterizeCount = 0;
+
+  @visibleForTesting
+  static int debugTotalRasterizeCount = 0;
 
   @override
   bool get hasCache => _cacheEntry != null;
@@ -76,29 +105,51 @@ class CanvasKitPainter extends WebParagraphPainter {
     required ui.Offset canvas2dShift,
     required ui.Offset offset,
   }) {
-    // Detect active scrolling across frames by checking position delta
+    // Detect confirmed active scrolling across consecutive frames.
+    // - Uses ui.PlatformDispatcher.instance.frameData.frameNumber to track frame sequence.
+    // - On consecutive frames (frame gap <= 2), motion is continuous.
+    // - If frames are not consecutive (e.g. slow 1-second timer ticks), isConsecutive is false,
+    //   forcing strict subpixel bin matching so text is 100% crisp at rest.
+    // - On the first frame moving from rest (_wasMoving is false or not consecutive), only shifts
+    //   <= maxInitialMotionDelta (100px) can initiate motion; larger jumps are treated as teleports.
+    // - Once active motion is confirmed (_wasMoving && isConsecutive), high-velocity flings (> 100px)
+    //   are permitted without dropping frames.
     const motionEpsilon = 0.001;
-    final bool isScrolling =
-        _lastOffset != null &&
-        ((offset.dx - _lastOffset!.dx).abs() > motionEpsilon ||
-            (offset.dy - _lastOffset!.dy).abs() > motionEpsilon);
+    const maxInitialMotionDelta = 100.0;
+
+    final int currentFrame = ui.PlatformDispatcher.instance.frameData.frameNumber;
+    final bool isConsecutive = _lastFrameNumber != null && (currentFrame - _lastFrameNumber! <= 2);
+
+    final double deltaX = _lastOffset != null ? (offset.dx - _lastOffset!.dx).abs() : 0.0;
+    final double deltaY = _lastOffset != null ? (offset.dy - _lastOffset!.dy).abs() : 0.0;
+    final bool hasDelta = _lastOffset != null && (deltaX > motionEpsilon || deltaY > motionEpsilon);
+
+    // Shifts <= 100px on consecutive frames from rest can initiate motion; larger jumps (> 100px) or non-consecutive ticks are discrete.
+    final bool canInitiateMotion =
+        isConsecutive && deltaX <= maxInitialMotionDelta && deltaY <= maxInitialMotionDelta;
+    final bool isScrolling = hasDelta && _wasMoving && isConsecutive;
+    _wasMoving = hasDelta && (isScrolling || canInitiateMotion);
     _lastOffset = offset;
+    _lastFrameNumber = currentFrame;
 
     // Check cache matching:
-    // - While active scrolling: Loose match (scale only) to guarantee 60/120 FPS jank-free scrolling.
-    // - When stationary/settled: Strict match (scale + canvas2dShift) to guarantee 100% crisp static text.
+    // 1. Scale must always match (DPR or canvas matrix scale changes invalidate the cache).
+    // 2. If isScrolling is true (confirmed multi-frame motion), scale matching is sufficient.
+    // 3. Otherwise (static text, first jump, or settling), both X and Y subpixel phases must fall
+    //    in the same 1/4-pixel bin ([0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1.0)).
     final _ParagraphCacheEntry? cacheEntry = _cacheEntry;
     if (cacheEntry != null) {
-      final bool cacheMatches = isScrolling
-          ? cacheEntry.matchesScale(
-              effectiveScaleX: effectiveScaleX,
-              effectiveScaleY: effectiveScaleY,
-            )
-          : cacheEntry.matches(
-              effectiveScaleX: effectiveScaleX,
-              effectiveScaleY: effectiveScaleY,
-              canvas2dShift: canvas2dShift,
-            );
+      final bool cacheMatches =
+          cacheEntry.matchesScale(
+            effectiveScaleX: effectiveScaleX,
+            effectiveScaleY: effectiveScaleY,
+          ) &&
+          (isScrolling ||
+              cacheEntry.matchesSubpixelPhase(
+                effectiveScaleX: effectiveScaleX,
+                effectiveScaleY: effectiveScaleY,
+                canvas2dShift: canvas2dShift,
+              ));
 
       if (!cacheMatches) {
         clearCache();
@@ -107,6 +158,7 @@ class CanvasKitPainter extends WebParagraphPainter {
 
     if (!hasCache) {
       debugRasterizeCount++;
+      debugTotalRasterizeCount++;
       final imageInfo = SkImageInfo(
         alphaType: canvasKit.AlphaType.Unpremul,
         colorType: canvasKit.ColorType.RGBA_8888,

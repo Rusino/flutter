@@ -144,6 +144,8 @@ abstract class WebParagraphPainter {
   bool get hasCache;
   void clearCache();
 
+  int get debugRasterizeCount => 0;
+
   void _paintAllBlocks(StyleElements styleElement, ui.Canvas canvas, ui.Offset offset) {
     for (final TextLine line in _paragraph.getLayout().lines) {
       for (final LineBlock block in line.visualBlocks) {
