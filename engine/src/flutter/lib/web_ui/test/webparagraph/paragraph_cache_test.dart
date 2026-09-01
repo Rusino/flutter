@@ -137,22 +137,22 @@ Future<void> testMain() async {
   });
 
   test('WebParagraphPainter dual-mode cache policy for static vs scrolling text', () async {
-    // -------------------------------------------------------------------------------------------------------------------------
-    // Test Matrix (pinned dpr = 1.0):
-    // | Case | State / Intent                                | Offset           | Bin   | hasDelta | _wasMoving | isScrolling | Count | Action & Rationale                                                                      |
-    // |:----:|:----------------------------------------------|:-----------------|:-----:|:--------:|:----------:|:-----------:|:-----:|:----------------------------------------------------------------------------------------|
-    // |  1   | Initial Paint                                 | (10.1, 20.1)     | Bin 0 |  false   |   false    |    false    | 0->1  | Rasterize #1 (Bin 0): Empty cache.                                                      |
-    // |  2   | Static: Identical offset                      | (10.1, 20.1)     | Bin 0 |  false   |   false    |    false    | 1->1  | Cache Hit: Same offset, exact Bin 0 match.                                              |
-    // |  3a  | Static: Shift + fractional shift (same bin)   | (60.12, 70.12)   | Bin 0 |   true   |   false    |    false    | 1->1  | Cache Hit: Δ=50px, but 0.12 is in same Bin 0 [0.0, 0.25). Starts motion (_wasMoving=t). |
-    // |  3b  | Static: Settle at rest                        | (60.12, 70.12)   | Bin 0 |  false   |    true    |    false    | 1->1  | Cache Hit (Settled): Settled at rest; resets _wasMoving=false.                          |
-    // |  4   | Scroll Seq 1: Frame 1 (Move to Bin 1)         | (60.35, 70.35)   | Bin 1 |   true   |   false    |    false    | 1->2  | Rasterize #2 (Bin 1): First move from rest, Bin 1 != Bin 0. Starts motion (_wasMoving=t)|
-    // |  5   | Scroll Seq 1: Frame 2 (Move to Bin 2)         | (60.6, 70.6)     | Bin 2 |   true   |    true    |    true     | 2->2  | Cache Hit: Confirmed scrolling -> reuses cache across bin change to preserve 60/120 FPS.|
-    // |  6   | Scroll Seq 1: Frame 3 (Move to Bin 3)         | (60.85, 70.85)   | Bin 3 |   true   |    true    |    true     | 2->2  | Cache Hit: Confirmed scrolling -> continues cache reuse.                                 |
-    // |  7   | Scroll Seq 1: Settle in Different Bin         | (60.85, 70.85)   | Bin 3 |  false   |    true    |    false    | 2->3  | Rasterize #3 (Bin 3): Stopped (delta=0). Settled Bin 3 != cached Bin 1 -> redraw once. |
-    // |  8   | Scroll Seq 2: Frame 1 (Move to Bin 0)         | (10.1, 20.1)     | Bin 0 |   true   |   false    |    false    | 3->4  | Rasterize #4 (Bin 0): First move from rest, Bin 0 != Bin 3. Starts motion (_wasMoving=t)|
-    // |  9   | Scroll Seq 2: Frame 2 (Move within Bin 0)     | (10.2, 20.2)     | Bin 0 |   true   |    true    |    true     | 4->4  | Cache Hit: Confirmed scrolling -> reuses cache. Offset also in Bin 0.                   |
-    // |  10  | Scroll Seq 2: Settle in Same Bin              | (10.2, 20.2)     | Bin 0 |  false   |    true    |    false    | 4->4  | Cache Hit (Settled): Stopped (delta=0). Settled Bin 0 == cached Bin 0 -> reuse cache!   |
-    // -------------------------------------------------------------------------------------------------------------------------
+    // -------------------------------------------------------------------------------------------------------------------------------------------------
+    // Dual-mode Cache Test Matrix (pinned dpr = 1.0):
+    // | Case | Frame # | State / Intent                                | Offset           | Bin   | Frame Gap | hasDelta | _wasMoving | isScrolling | Count | Action & Rationale                                                                      |
+    // |:----:|:-------:|:----------------------------------------------|:-----------------|:-----:|:---------:|:--------:|:----------:|:-----------:|:-----:|:----------------------------------------------------------------------------------------|
+    // |  1   |   100   | Initial Paint                                 | (10.1, 20.1)     | Bin 0 |    N/A    |  false   |   false    |    false    | 0->1  | Rasterize #1 (Bin 0): Empty cache in Frame 100.                                         |
+    // |  2   |   100   | Static: Identical offset                      | (10.1, 20.1)     | Bin 0 |     0     |  false   |   false    |    false    | 1->1  | Cache Hit: Same offset, exact Bin 0 match.                                              |
+    // |  3a  |   101   | Static: Shift + fractional shift (same bin)   | (60.12, 70.12)   | Bin 0 |     1     |   true   |   false    |    false    | 1->1  | Cache Hit: Δ=50px, but 0.12 is in same Bin 0 [0.0, 0.25). Starts motion (_wasMoving=t). |
+    // |  3b  |   102   | Static: Settle at rest                        | (60.12, 70.12)   | Bin 0 |     1     |  false   |    true    |    false    | 1->1  | Cache Hit (Settled): Settled at rest; matches Bin 0; resets _wasMoving=false.          |
+    // |  4   |   103   | Scroll Seq 1: Frame 1 (Move to Bin 1)         | (60.35, 70.35)   | Bin 1 |     1     |   true   |   false    |    false    | 1->2  | Rasterize #2 (Bin 1): First move from rest, Bin 1 != Bin 0. Starts motion (_wasMoving=t)|
+    // |  5   |   104   | Scroll Seq 1: Frame 2 (Move to Bin 2)         | (60.6, 70.6)     | Bin 2 |     1     |   true   |    true    |    true     | 2->2  | Cache Hit: Confirmed scrolling -> reuses cache across bin change to preserve 60/120 FPS.|
+    // |  6   |   105   | Scroll Seq 1: Frame 3 (Move to Bin 3)         | (60.85, 70.85)   | Bin 3 |     1     |   true   |    true    |    true     | 2->2  | Cache Hit: Confirmed scrolling -> continues cache reuse.                                 |
+    // |  7   |   106   | Scroll Seq 1: Settle in Different Bin         | (60.85, 70.85)   | Bin 3 |     1     |  false   |    true    |    false    | 2->3  | Rasterize #3 (Bin 3): Stopped (delta=0). Settled Bin 3 != cached Bin 1 -> redraw once. |
+    // |  8   |   107   | Scroll Seq 2: Frame 1 (Move to Bin 0)         | (10.1, 20.1)     | Bin 0 |     1     |   true   |   false    |    false    | 3->4  | Rasterize #4 (Bin 0): First move from rest, Bin 0 != Bin 3. Starts motion (_wasMoving=t)|
+    // |  9   |   108   | Scroll Seq 2: Frame 2 (Move within Bin 0)     | (10.2, 20.2)     | Bin 0 |     1     |   true   |    true    |    true     | 4->4  | Cache Hit: Confirmed scrolling -> reuses cache. Offset also in Bin 0.                   |
+    // |  10  |   109   | Scroll Seq 2: Settle in Same Bin              | (10.2, 20.2)     | Bin 0 |     1     |  false   |    true    |    false    | 4->4  | Cache Hit (Settled): Stopped (delta=0). Settled Bin 0 == cached Bin 0 -> reuse cache!   |
+    // -------------------------------------------------------------------------------------------------------------------------------------------------
     final double originalDpr = EngineFlutterDisplay.instance.devicePixelRatio;
     try {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
@@ -171,18 +171,19 @@ Future<void> testMain() async {
       // =========================================================================
 
       // -------------------------------------------------------------------------
-      // Case 1: Initial paint at Offset(10.1, 20.1)
+      // Case 1: Initial paint at Frame 100, Offset(10.1, 20.1)
       // - Current count: 0 (no cache exists yet).
       // - Offset fractional parts: dx=0.1, dy=0.1 -> maps to Bin 0 [0.0, 0.25).
       // - Expected: Must rasterize a new SkImage cache entry for Bin 0. Count becomes 1.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(100);
       expect(painter.debugRasterizeCount, 0);
       painter.paint(canvas, const Offset(10.1, 20.1));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 1);
 
       // -------------------------------------------------------------------------
-      // Case 2: Re-paint at identical Offset(10.1, 20.1)
+      // Case 2: Re-paint at identical Offset(10.1, 20.1) in Frame 100
       // - Current count: 1 (cached at Bin 0).
       // - Offset: delta = 0, exact subpixel bin match (Bin 0 == Bin 0).
       // - Expected: Clean cache hit. Count stays 1.
@@ -193,25 +194,27 @@ Future<void> testMain() async {
       expect(painter.debugRasterizeCount, 1);
 
       // -------------------------------------------------------------------------
-      // Case 3a: Shift with slight fractional difference within 100px limit, same Bin 0: Offset(60.12, 70.12)
+      // Case 3a: Frame 101 -> Shift with slight fractional difference within 100px limit, same Bin 0: Offset(60.12, 70.12)
       // - Current count: 1 (cached at Bin 0).
       // - Offset: delta = 50.02 px (<= 100.0 px). Fractional parts: dx=0.12, dy=0.12 -> still in Bin 0 [0.0, 0.25).
       // - First move from rest (_wasMoving = false -> isScrolling = false).
       // - Subpixel phase check: current Bin 0 matches cached Bin 0.
       // - Expected: Reuses cache because both fall in Bin 0. Count stays 1. Starts motion (_wasMoving = true).
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(101);
       expect(painter.debugRasterizeCount, 1);
       painter.paint(canvas, const Offset(60.12, 70.12));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 1);
 
       // -------------------------------------------------------------------------
-      // Case 3b: Settle at rest at Offset(60.12, 70.12)
+      // Case 3b: Frame 102 -> Settle at rest at Offset(60.12, 70.12)
       // - Current count: 1 (cached at Bin 0).
       // - Delta = 0 -> static/settled mode (isScrolling = false, _wasMoving resets to false).
       // - Subpixel phase check: Bin 0 matches cached Bin 0.
       // - Expected: Reuses cache upon settling. Count stays 1.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(102);
       expect(painter.debugRasterizeCount, 1);
       painter.paint(canvas, const Offset(60.12, 70.12));
       expect(painter.hasCache, isTrue);
@@ -222,47 +225,51 @@ Future<void> testMain() async {
       // =========================================================================
 
       // -------------------------------------------------------------------------
-      // Case 4: First move to Bin 1 at Offset(60.35, 70.35)
+      // Case 4: Frame 103 -> First move to Bin 1 at Offset(60.35, 70.35)
       // - Current count: 1 (cached at Bin 0).
       // - Offset fractional parts: dx=0.35, dy=0.35 -> maps to Bin 1 [0.25, 0.50).
       // - First move from rest (_wasMoving is false -> isScrolling is false).
       // - Subpixel phase check: Bin 1 != cached Bin 0.
       // - Expected: Phase bin mismatch forces re-rasterization for Bin 1. Count becomes 2. Starts motion (_wasMoving = true).
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(103);
       expect(painter.debugRasterizeCount, 1);
       painter.paint(canvas, const Offset(60.35, 70.35));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 2);
 
       // -------------------------------------------------------------------------
-      // Case 5: Second scrolling move in sequence to Bin 2 at Offset(60.6, 70.6)
+      // Case 5: Frame 104 -> Second scrolling move in sequence to Bin 2 at Offset(60.6, 70.6)
       // - Current count: 2 (cached at Bin 1).
-      // - Delta = 0.25 px. _wasMoving is true -> isScrolling evaluates to true (confirmed active scrolling).
+      // - Delta = 0.25 px. _wasMoving is true, frameGap = 1 -> isScrolling evaluates to true (confirmed active scrolling).
       // - Expected: Active scrolling disregards subpixel bin change (Bin 2 vs Bin 1) to preserve 60/120 FPS. Count stays 2.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(104);
       expect(painter.debugRasterizeCount, 2);
       painter.paint(canvas, const Offset(60.6, 70.6));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 2);
 
       // -------------------------------------------------------------------------
-      // Case 6: Third scrolling move in sequence to Bin 3 at Offset(60.85, 70.85)
+      // Case 6: Frame 105 -> Third scrolling move in sequence to Bin 3 at Offset(60.85, 70.85)
       // - Current count: 2 (cached at Bin 1).
-      // - Delta = 0.25 px. _wasMoving is true -> isScrolling is true.
+      // - Delta = 0.25 px. _wasMoving is true, frameGap = 1 -> isScrolling is true.
       // - Expected: Continuous scrolling continues to reuse scale-matched cache. Count stays 2.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(105);
       expect(painter.debugRasterizeCount, 2);
       painter.paint(canvas, const Offset(60.85, 70.85));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 2);
 
       // -------------------------------------------------------------------------
-      // Case 7: Scroll sequence 1 stops / settles at Offset(60.85, 70.85)
+      // Case 7: Frame 106 -> Scroll sequence 1 stops / settles at Offset(60.85, 70.85)
       // - Current count: 2 (cached at Bin 1).
       // - Delta = 0 -> isScrolling is false, _wasMoving resets to false.
       // - Settled subpixel phase check: current position is Bin 3, but cached image is Bin 1.
       // - Expected: Settled phase bin mismatch forces re-rasterization for Bin 3 (100% crisp static text). Count becomes 3.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(106);
       expect(painter.debugRasterizeCount, 2);
       painter.paint(canvas, const Offset(60.85, 70.85));
       expect(painter.hasCache, isTrue);
@@ -273,43 +280,47 @@ Future<void> testMain() async {
       // =========================================================================
 
       // -------------------------------------------------------------------------
-      // Case 8: First move of sequence 2 from rest to Bin 0 at Offset(10.1, 20.1)
+      // Case 8: Frame 107 -> First move of sequence 2 from rest to Bin 0 at Offset(10.1, 20.1)
       // - Current count: 3 (cached at Bin 3).
       // - Delta = 50.75 px (<= 100.0 px). Fractional parts: dx=0.1, dy=0.1 -> maps to Bin 0 [0.0, 0.25).
       // - First move from rest (_wasMoving is false -> isScrolling is false).
       // - Subpixel phase check: Bin 0 != cached Bin 3.
       // - Expected: Phase bin mismatch forces re-rasterization for Bin 0. Count becomes 4. Starts motion (_wasMoving = true).
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(107);
       expect(painter.debugRasterizeCount, 3);
       painter.paint(canvas, const Offset(10.1, 20.1));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 4);
 
       // -------------------------------------------------------------------------
-      // Case 9: Second scrolling move in sequence 2 to Offset(10.2, 20.2) (still in Bin 0)
+      // Case 9: Frame 108 -> Second scrolling move in sequence 2 to Offset(10.2, 20.2) (still in Bin 0)
       // - Current count: 4 (cached at Bin 0).
-      // - Delta = 0.1 px. _wasMoving is true -> isScrolling is true (confirmed active scrolling).
+      // - Delta = 0.1 px. _wasMoving is true, frameGap = 1 -> isScrolling is true (confirmed active scrolling).
       // - Fractional parts: dx=0.2, dy=0.2 (falls in same Bin 0).
       // - Expected: Active scrolling reuses scale-matched cache. Count stays 4.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(108);
       expect(painter.debugRasterizeCount, 4);
       painter.paint(canvas, const Offset(10.2, 20.2));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 4);
 
       // -------------------------------------------------------------------------
-      // Case 10: Scroll sequence 2 stops / settles at Offset(10.2, 20.2)
+      // Case 10: Frame 109 -> Scroll sequence 2 stops / settles at Offset(10.2, 20.2)
       // - Current count: 4 (cached at Bin 0).
       // - Delta = 0 -> isScrolling is false, _wasMoving resets to false.
       // - Settled subpixel phase check: current position is in Bin 0, which matches cached Bin 0 (from Case 8).
       // - Expected: Settled phase matches cached bin -> reuses cache without redrawing! Count stays 4.
       // -------------------------------------------------------------------------
+      FrameService.instance.debugSetFrameNumber(109);
       expect(painter.debugRasterizeCount, 4);
       painter.paint(canvas, const Offset(10.2, 20.2));
       expect(painter.hasCache, isTrue);
       expect(painter.debugRasterizeCount, 4);
     } finally {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
+      FrameService.instance.debugResetFrameData();
     }
   });
 
@@ -1326,4 +1337,71 @@ Future<void> testMain() async {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
     }
   });
+
+  test(
+    'WebParagraphPainter does not trigger motion detection when painted multiple times in the same frame',
+    () {
+      // -------------------------------------------------------------------------------------------------------------------------------------------------
+      // Same-Frame Multi-Draw Test Matrix (pinned dpr = 1.0):
+      // | Step | Frame # | Logical Offset   | Target Bin | Frame Gap | hasDelta | _wasMoving | isScrolling | Count | Action & Rationale                                                   |
+      // |:----:|:-------:|:----------------:|:----------:|:---------:|:--------:|:----------:|:-----------:|:-----:|:---------------------------------------------------------------------|
+      // |  1   |   100   | (10.10, 20.10)   |   Bin 0    |    N/A    |  false   |   false    |    false    | 0->1  | Rasterize #1 (Bin 0): Initial draw in Frame 100, empty cache.        |
+      // |  2   |   100   | (10.35, 20.35)   |   Bin 1    |     0     |   true   |   false    |    false    | 1->2  | Rasterize #2 (Bin 1): Same frame (gap=0) rejects motion; Bin 1!=Bin 0|
+      // |  3   |   101   | (10.10, 20.10)   |   Bin 0    |     1     |   true   |   false    |    false    | 2->3  | Rasterize #3 (Bin 0): First draw in Frame 101, gap=1; Bin 0!=Bin 1.  |
+      // |  4   |   101   | (10.35, 20.35)   |   Bin 1    |     0     |   true   |   false    |    false    | 3->4  | Rasterize #4 (Bin 1): Same frame (gap=0) rejects motion; Bin 1!=Bin 0|
+      // -------------------------------------------------------------------------------------------------------------------------------------------------
+      final double originalDpr = EngineFlutterDisplay.instance.devicePixelRatio;
+      try {
+        EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+
+        final builder = ParagraphBuilder(ParagraphStyle(fontFamily: 'Roboto', fontSize: 16));
+        builder.addText('Same Frame Multi-Draw Test');
+        final paragraph = builder.build() as WebParagraph;
+        paragraph.layout(const ParagraphConstraints(width: 300));
+
+        final painter = CanvasKitPainter(paragraph);
+        final recorder = PictureRecorder();
+        final canvas = Canvas(recorder, region);
+
+        // -------------------------------------------------------------------------
+        // Step 1: Initial draw in Frame 100 at Offset(10.10, 20.10) -> Rasterize #1 (Bin 0)
+        // -------------------------------------------------------------------------
+        FrameService.instance.debugSetFrameNumber(100);
+        painter.paint(canvas, const Offset(10.10, 20.10));
+        expect(painter.hasCache, isTrue);
+        expect(painter.debugRasterizeCount, 1);
+
+        // -------------------------------------------------------------------------
+        // Step 2: Second draw in Frame 100 at Offset(10.35, 20.35) in the SAME frame (gap = 0)
+        // - Frame gap = 0 -> isConsecutive = false -> isScrolling = false.
+        // - Strict subpixel phase check detects Bin 1 != cached Bin 0 -> forces Rasterize #2.
+        // -------------------------------------------------------------------------
+        painter.paint(canvas, const Offset(10.35, 20.35));
+        expect(painter.hasCache, isTrue);
+        expect(painter.debugRasterizeCount, 2);
+
+        // -------------------------------------------------------------------------
+        // Step 3: First draw in Frame 101 at Offset(10.10, 20.10)
+        // - Frame gap = 1 -> isConsecutive = true, but _wasMoving was false from previous same-frame draw.
+        // - Strict subpixel phase check detects Bin 0 != cached Bin 1 -> forces Rasterize #3 (starts motion).
+        // -------------------------------------------------------------------------
+        FrameService.instance.debugSetFrameNumber(101);
+        painter.paint(canvas, const Offset(10.10, 20.10));
+        expect(painter.hasCache, isTrue);
+        expect(painter.debugRasterizeCount, 3);
+
+        // -------------------------------------------------------------------------
+        // Step 4: Second draw in Frame 101 at Offset(10.35, 20.35) in the SAME frame (gap = 0)
+        // - Frame gap = 0 -> isConsecutive = false -> isScrolling = false.
+        // - Strict subpixel phase check detects Bin 1 != cached Bin 0 -> forces Rasterize #4.
+        // -------------------------------------------------------------------------
+        painter.paint(canvas, const Offset(10.35, 20.35));
+        expect(painter.hasCache, isTrue);
+        expect(painter.debugRasterizeCount, 4);
+      } finally {
+        EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
+        FrameService.instance.debugResetFrameData();
+      }
+    },
+  );
 }

@@ -118,7 +118,8 @@ class CanvasKitPainter extends WebParagraphPainter {
     const maxInitialMotionDelta = 100.0;
 
     final int currentFrame = ui.PlatformDispatcher.instance.frameData.frameNumber;
-    final bool isConsecutive = _lastFrameNumber != null && (currentFrame - _lastFrameNumber! <= 2);
+    final int frameGap = _lastFrameNumber != null ? currentFrame - _lastFrameNumber! : -1;
+    final bool isConsecutive = frameGap == 1 || frameGap == 2;
 
     final double deltaX = _lastOffset != null ? (offset.dx - _lastOffset!.dx).abs() : 0.0;
     final double deltaY = _lastOffset != null ? (offset.dy - _lastOffset!.dy).abs() : 0.0;
@@ -137,6 +138,9 @@ class CanvasKitPainter extends WebParagraphPainter {
     // 2. If isScrolling is true (confirmed multi-frame motion), scale matching is sufficient.
     // 3. Otherwise (static text, first jump, or settling), both X and Y subpixel phases must fall
     //    in the same 1/4-pixel bin ([0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1.0)).
+    var drawSourceRect = sourceRect;
+    var drawTargetRect = targetRect;
+
     final _ParagraphCacheEntry? cacheEntry = _cacheEntry;
     if (cacheEntry != null) {
       final bool cacheMatches =
@@ -153,6 +157,16 @@ class CanvasKitPainter extends WebParagraphPainter {
 
       if (!cacheMatches) {
         clearCache();
+      } else {
+        final double width = cacheEntry.image.width.toDouble();
+        final double height = cacheEntry.image.height.toDouble();
+        drawSourceRect = ui.Rect.fromLTWH(0, 0, width, height);
+        drawTargetRect = ui.Rect.fromLTWH(
+          offset.dx - cacheEntry.canvas2dShift.dx,
+          offset.dy - cacheEntry.canvas2dShift.dy,
+          width / effectiveScaleX,
+          height / effectiveScaleY,
+        );
       }
     }
 
@@ -190,8 +204,8 @@ class CanvasKitPainter extends WebParagraphPainter {
 
     canvas.drawImageRect(
       _cacheEntry!.image,
-      sourceRect,
-      targetRect,
+      drawSourceRect,
+      drawTargetRect,
       ui.Paint()..filterQuality = ui.FilterQuality.none,
     );
   }
