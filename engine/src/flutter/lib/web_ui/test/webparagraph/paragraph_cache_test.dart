@@ -246,36 +246,39 @@ Future<void> testMain() async {
     }
   });
 
-  test('WebParagraph sourceRect includes antialiasing safety padding to prevent glyph clipping', () {
-    final double originalDpr = EngineFlutterDisplay.instance.devicePixelRatio;
-    try {
-      EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
-      final style = WebParagraphStyle(fontFamily: 'Roboto', fontSize: 20);
-      final builder = WebParagraphBuilder(style);
-      builder.addText('gjy_');
-      final WebParagraph paragraph = builder.build();
-      paragraph.layout(const ParagraphConstraints(width: 200));
+  test(
+    'WebParagraph sourceRect includes antialiasing safety padding to prevent glyph clipping',
+    () {
+      final double originalDpr = EngineFlutterDisplay.instance.devicePixelRatio;
+      try {
+        EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(1.0);
+        final style = WebParagraphStyle(fontFamily: 'Roboto', fontSize: 20);
+        final builder = WebParagraphBuilder(style);
+        builder.addText('gjy_');
+        final WebParagraph paragraph = builder.build();
+        paragraph.layout(const ParagraphConstraints(width: 200));
 
-      final (Rect sourceRect, Rect targetRect, Offset canvas2dShift) = calculateParagraphForTest(
-        paragraph,
-        Offset.zero,
-        1.0,
-      );
+        final (Rect sourceRect, Rect targetRect, Offset canvas2dShift) = calculateParagraphForTest(
+          paragraph,
+          Offset.zero,
+          1.0,
+        );
 
-      final double shiftPhysicalX = (-paragraph.paintBounds.left).ceilToDouble();
-      final double shiftPhysicalY = (-paragraph.paintBounds.top).ceilToDouble();
-      const kAntialiasingPadding = 2.0;
-      final double expectedWidth =
-          (shiftPhysicalX + paragraph.paintBounds.right + kAntialiasingPadding).ceilToDouble();
-      final double expectedHeight =
-          (shiftPhysicalY + paragraph.paintBounds.bottom + kAntialiasingPadding).ceilToDouble();
+        final double shiftPhysicalX = (-paragraph.paintBounds.left).ceilToDouble();
+        final double shiftPhysicalY = (-paragraph.paintBounds.top).ceilToDouble();
+        const kAntialiasingPadding = 2.0;
+        final double expectedWidth =
+            (shiftPhysicalX + paragraph.paintBounds.right + kAntialiasingPadding).ceilToDouble();
+        final double expectedHeight =
+            (shiftPhysicalY + paragraph.paintBounds.bottom + kAntialiasingPadding).ceilToDouble();
 
-      expect(sourceRect.width, closeTo(expectedWidth, epsilon));
-      expect(sourceRect.height, closeTo(expectedHeight, epsilon));
-    } finally {
-      EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
-    }
-  });
+        expect(sourceRect.width, closeTo(expectedWidth, epsilon));
+        expect(sourceRect.height, closeTo(expectedHeight, epsilon));
+      } finally {
+        EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
+      }
+    },
+  );
 
   test('WebParagraphPainter invalidates cache when canvas transform scale changes', () {
     final double originalDpr = EngineFlutterDisplay.instance.devicePixelRatio;
