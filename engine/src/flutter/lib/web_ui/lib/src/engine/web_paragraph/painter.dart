@@ -54,6 +54,9 @@ double _calculateShift(double minShift, double targetFrac) {
   return shift;
 }
 
+/// Calculates the source and target rectangles, and the 2D canvas shift
+/// /// for a paragraph, combining the device pixel ratio and canvas transform.
+/// This is used for testing the subpixel alignment and caching logic.
 @visibleForTesting
 (ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) calculateParagraphForTest(
   WebParagraph paragraph,
@@ -144,6 +147,7 @@ abstract class WebParagraphPainter {
   bool get hasCache;
   void clearCache();
 
+  /// The number of times this painter has rasterized the paragraph, exposed for testing.
   int get debugRasterizeCount => 0;
 
   void _paintAllBlocks(StyleElements styleElement, ui.Canvas canvas, ui.Offset offset) {

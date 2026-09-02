@@ -78,10 +78,12 @@ class CanvasKitPainter extends WebParagraphPainter {
   int? _lastFrameNumber;
   bool _wasMoving = false;
 
+  /// For a specific paragraph, how many times it was rasterized in the current test
   @override
   @visibleForTesting
   int debugRasterizeCount = 0;
 
+  /// Across all paragraphs, how many times they were rasterized in the current test
   @visibleForTesting
   static int debugTotalRasterizeCount = 0;
 
@@ -107,15 +109,16 @@ class CanvasKitPainter extends WebParagraphPainter {
   }) {
     // Detect confirmed active scrolling across consecutive frames.
     // - Uses ui.PlatformDispatcher.instance.frameData.frameNumber to track frame sequence.
-    // - On consecutive frames (frame gap <= 2), motion is continuous.
+    // - On consecutive frames (frame gap <= 2), motion is continuous (we allow gap == 2 for 1 dropped frame).
     // - If frames are not consecutive (e.g. slow 1-second timer ticks), isConsecutive is false,
     //   forcing strict subpixel bin matching so text is 100% crisp at rest.
-    // - On the first frame moving from rest (_wasMoving is false or not consecutive), only shifts
-    //   <= maxInitialMotionDelta (100px) can initiate motion; larger jumps are treated as teleports.
+    // - On the first frame moving from rest (_wasMoving is false or not consecutive),
+    //   only shifts <= maxInitialMotionDelta (100px) can initiate motion; larger jumps are treated as teleports.
     // - Once active motion is confirmed (_wasMoving && isConsecutive), high-velocity flings (> 100px)
     //   are permitted without dropping frames.
     const motionEpsilon = 0.001;
-    const maxInitialMotionDelta = 100.0;
+    const maxInitialMotionDelta =
+        100.0; // 100px is the threshold for initiating motion from "teleport".
 
     final int currentFrame = ui.PlatformDispatcher.instance.frameData.frameNumber;
     final int frameGap = _lastFrameNumber != null ? currentFrame - _lastFrameNumber! : -1;
@@ -158,6 +161,8 @@ class CanvasKitPainter extends WebParagraphPainter {
       if (!cacheMatches) {
         clearCache();
       } else {
+        // If we use cache we have to get the source and target rects from the cache entry,
+        // because the cached image may have been rasterized at a different scale or subpixel phase.
         final double width = cacheEntry.image.width.toDouble();
         final double height = cacheEntry.image.height.toDouble();
         drawSourceRect = ui.Rect.fromLTWH(0, 0, width, height);

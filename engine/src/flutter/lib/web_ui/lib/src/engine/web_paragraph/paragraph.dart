@@ -1101,9 +1101,11 @@ class WebParagraph implements ui.Paragraph {
   late final TextLayout _layout = TextLayout(this);
   late final WebParagraphPainter _painter = renderer.createWebParagraphPainter(this);
 
+  /// The painter used to render this paragraph, exposed for testing.
   @visibleForTesting
   WebParagraphPainter get debugPainter => _painter;
 
+  /// The number of times this paragraph has been rasterized, exposed for testing.
   @visibleForTesting
   int get debugRasterizeCount => _painter.debugRasterizeCount;
 }

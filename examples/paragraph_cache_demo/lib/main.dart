@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -82,7 +83,8 @@ class BenchmarkReport {
   final double scrollSpeed;
 }
 
-class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProviderStateMixin {
+class _MainDemoScreenState extends State<MainDemoScreen>
+    with SingleTickerProviderStateMixin {
   AppTab _currentTab = AppTab.visualBlurAnalyzer;
   BenchmarkMode _benchmarkMode = BenchmarkMode.short100;
   TrackingStrategy _strategy = TrackingStrategy.consecutiveFrameSequence;
@@ -143,8 +145,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     _initDatasets();
     _diagnosticParagraph = _buildDiagnosticParagraph();
     _benchmarkScrollController = ScrollController();
-    _animController = AnimationController(vsync: this, duration: const Duration(seconds: 1))
-      ..addListener(_onContinuousScrollTick);
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..addListener(_onContinuousScrollTick);
 
     // Subscribe to Flutter engine frame timings
     SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
@@ -183,7 +187,9 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     _largeTextsList = List.generate(25, (i) {
       final String id = i.toString().padLeft(3, '0');
       final StringBuffer sb = StringBuffer();
-      sb.write('LARGE TEXT BLOCK #$id (EXACT 1000 CHARACTERS UNIQUE PAYLOAD):\n');
+      sb.write(
+        'LARGE TEXT BLOCK #$id (EXACT 1000 CHARACTERS UNIQUE PAYLOAD):\n',
+      );
       sb.write(
         '========================================================================================\n',
       );
@@ -215,19 +221,29 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
         'Section 9 (Block $id): End of large text block payload for unique benchmark verification $id.\n',
       );
       final String fullStr = sb.toString();
-      return fullStr.length >= 1000 ? fullStr.substring(0, 1000) : fullStr.padRight(1000, '=');
+      return fullStr.length >= 1000
+          ? fullStr.substring(0, 1000)
+          : fullStr.padRight(1000, '=');
     });
   }
 
   ui.Paragraph _buildDiagnosticParagraph() {
     final builder = ui.ParagraphBuilder(
-      ui.ParagraphStyle(fontFamily: 'Roboto', fontSize: 36, fontWeight: FontWeight.w900),
+      ui.ParagraphStyle(
+        fontFamily: 'Roboto',
+        fontSize: 36,
+        fontWeight: FontWeight.w900,
+      ),
     );
     builder.pushStyle(ui.TextStyle(color: const Color(0xFFFFFFFF)));
     builder.addText('O S O S O S === === ===\n');
-    builder.pushStyle(ui.TextStyle(color: const Color(0xFF00E5FF), fontFamily: 'monospace'));
+    builder.pushStyle(
+      ui.TextStyle(color: const Color(0xFF00E5FF), fontFamily: 'monospace'),
+    );
     builder.addText('====================\n');
-    builder.pushStyle(ui.TextStyle(color: const Color(0xFFE6EDF3), fontFamily: 'Roboto'));
+    builder.pushStyle(
+      ui.TextStyle(color: const Color(0xFFE6EDF3), fontFamily: 'Roboto'),
+    );
     builder.addText('OOOO SSSS 8888 0000 ===');
     final p = builder.build();
     p.layout(const ui.ParagraphConstraints(width: 680));
@@ -296,14 +312,17 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     const double motionEpsilon = 0.001;
     const double maxInitialMotionDelta = 100.0;
 
-    final double delta = _lastOffsetY != null ? (newOffset - _lastOffsetY!).abs() : 0.0;
+    final double delta = _lastOffsetY != null
+        ? (newOffset - _lastOffsetY!).abs()
+        : 0.0;
     final bool hasDelta = _lastOffsetY != null && delta > motionEpsilon;
 
     bool isScrolling;
     if (_strategy == TrackingStrategy.consecutiveFrameSequence) {
       final bool isConsecutive =
           _lastFrameNumber != null && (currentFrame - _lastFrameNumber! <= 2);
-      final bool canInitiateMotion = isConsecutive && delta <= maxInitialMotionDelta;
+      final bool canInitiateMotion =
+          isConsecutive && delta <= maxInitialMotionDelta;
       isScrolling = hasDelta && _wasMoving && isConsecutive;
       _wasMoving = hasDelta && (isScrolling || canInitiateMotion);
     } else {
@@ -354,12 +373,15 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
 
     final now = DateTime.now();
     if (_lastScrollTickTime != null) {
-      final double dt = now.difference(_lastScrollTickTime!).inMicroseconds / 1000000.0;
+      final double dt =
+          now.difference(_lastScrollTickTime!).inMicroseconds / 1000000.0;
       final double step = _scrollSpeed * dt;
 
-      if (_currentTab == AppTab.benchmarkSuite && _benchmarkScrollController.hasClients) {
+      if (_currentTab == AppTab.benchmarkSuite &&
+          _benchmarkScrollController.hasClients) {
         double nextListOffset = _benchmarkScrollController.offset + step;
-        if (nextListOffset >= _benchmarkScrollController.position.maxScrollExtent) {
+        if (nextListOffset >=
+            _benchmarkScrollController.position.maxScrollExtent) {
           nextListOffset = 0.0;
           _benchmarkScrollController.jumpTo(0.0);
         } else {
@@ -427,7 +449,9 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
 
     _start60FpsScroll(_scrollSpeed);
 
-    _benchmarkCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _benchmarkCountdownTimer = Timer.periodic(const Duration(seconds: 1), (
+      timer,
+    ) {
       if (!mounted) return;
       setState(() {
         _benchmarkSecondsRemaining--;
@@ -476,11 +500,19 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
 
     totalTimes.sort();
     final double p95 =
-        totalTimes[(totalTimes.length * 0.95).floor().clamp(0, totalTimes.length - 1)];
+        totalTimes[(totalTimes.length * 0.95).floor().clamp(
+          0,
+          totalTimes.length - 1,
+        )];
     final double p99 =
-        totalTimes[(totalTimes.length * 0.99).floor().clamp(0, totalTimes.length - 1)];
+        totalTimes[(totalTimes.length * 0.99).floor().clamp(
+          0,
+          totalTimes.length - 1,
+        )];
     final double avgTotal = sumTotal / totalFrames;
-    final double avgFps = avgTotal > 0 ? (1000.0 / avgTotal).clamp(0.0, 120.0) : 60.0;
+    final double avgFps = avgTotal > 0
+        ? (1000.0 / avgTotal).clamp(0.0, 120.0)
+        : 60.0;
 
     final report = BenchmarkReport(
       mode: _benchmarkMode,
@@ -531,12 +563,18 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildReportMetricRow('Test Configuration', _getModeSubtitle(report.mode)),
+              _buildReportMetricRow(
+                'Test Configuration',
+                _getModeSubtitle(report.mode),
+              ),
               _buildReportMetricRow(
                 'Duration & Speed',
                 '${report.duration.inSeconds}s at ${report.scrollSpeed.toStringAsFixed(0)} px/s',
               ),
-              _buildReportMetricRow('Total Frames Collected', '${report.totalFrames} frames'),
+              _buildReportMetricRow(
+                'Total Frames Collected',
+                '${report.totalFrames} frames',
+              ),
               const Divider(color: Colors.white24, height: 16),
               _buildReportMetricRow(
                 'Average FPS',
@@ -582,7 +620,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text(
               'Close',
-              style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.cyanAccent,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -603,7 +644,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
           children: const [
             Icon(Icons.compare_arrows, color: Colors.purpleAccent),
             SizedBox(width: 8),
-            Text('3-Mode Performance Comparison', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              '3-Mode Performance Comparison',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: SizedBox(
@@ -622,28 +666,40 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                       padding: EdgeInsets.all(8),
                       child: Text(
                         'Metric',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                     Padding(
                       padding: EdgeInsets.all(8),
                       child: Text(
                         '100 Short\n(10 char)',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                     Padding(
                       padding: EdgeInsets.all(8),
                       child: Text(
                         '100 Medium\n(100 char)',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                     Padding(
                       padding: EdgeInsets.all(8),
                       child: Text(
                         'Large Texts\n(1000 char)',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ],
@@ -666,7 +722,8 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                 ),
                 _buildComparisonTableRow(
                   'Dropped Frames',
-                  (r) => '${r.droppedFrames} (${r.droppedFrameRatio.toStringAsFixed(1)}%)',
+                  (r) =>
+                      '${r.droppedFrames} (${r.droppedFrameRatio.toStringAsFixed(1)}%)',
                 ),
               ],
             ),
@@ -677,7 +734,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text(
               'Close',
-              style: TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.purpleAccent,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -685,7 +745,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     );
   }
 
-  TableRow _buildComparisonTableRow(String metric, String Function(BenchmarkReport r) extract) {
+  TableRow _buildComparisonTableRow(
+    String metric,
+    String Function(BenchmarkReport r) extract,
+  ) {
     String valFor(BenchmarkMode m) {
       final r = _reportsByMode[m];
       return r != null ? extract(r) : 'N/A';
@@ -695,13 +758,20 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
       children: [
         Padding(
           padding: const EdgeInsets.all(8),
-          child: Text(metric, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+          child: Text(
+            metric,
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.all(8),
           child: Text(
             valFor(BenchmarkMode.short100),
-            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.cyanAccent),
+            style: const TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: Colors.cyanAccent,
+            ),
           ),
         ),
         Padding(
@@ -741,14 +811,19 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: Colors.white70),
+          ),
           Text(
             value,
             style: TextStyle(
               fontSize: 13,
               fontFamily: 'monospace',
               fontWeight: FontWeight.bold,
-              color: isAlert ? Colors.redAccent : (highlight ? Colors.tealAccent : Colors.white),
+              color: isAlert
+                  ? Colors.redAccent
+                  : (highlight ? Colors.tealAccent : Colors.white),
             ),
           ),
         ],
@@ -804,7 +879,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     final settledRecorder = ui.PictureRecorder();
     final settledCanvas = ui.Canvas(settledRecorder);
     settledCanvas.drawColor(const Color(0xFF010409), ui.BlendMode.src);
-    settledCanvas.drawParagraph(_diagnosticParagraph, const ui.Offset(20.0, 20.0));
+    settledCanvas.drawParagraph(
+      _diagnosticParagraph,
+      const ui.Offset(20.0, 20.0),
+    );
     final settledPicture = settledRecorder.endRecording();
     final settledImage = await settledPicture.toImage(w, h);
     final settledBytes = (await settledImage.toByteData(
@@ -817,7 +895,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
       final originRecorder = ui.PictureRecorder();
       final originCanvas = ui.Canvas(originRecorder);
       originCanvas.drawColor(const Color(0xFF010409), ui.BlendMode.src);
-      originCanvas.drawParagraph(_diagnosticParagraph, const ui.Offset(20.0, 20.0));
+      originCanvas.drawParagraph(
+        _diagnosticParagraph,
+        const ui.Offset(20.0, 20.0),
+      );
       final originPicture = originRecorder.endRecording();
       final originImage = await originPicture.toImage(w, h);
       final originBytes = (await originImage.toByteData(
@@ -833,7 +914,8 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
 
           for (int c = 0; c < 3; c++) {
             final double val =
-                (1.0 - fracY) * originBytes[idx + c] + fracY * originBytes[prevIdx + c];
+                (1.0 - fracY) * originBytes[idx + c] +
+                fracY * originBytes[prevIdx + c];
             resampled[idx + c] = val.clamp(0.0, 255.0).toInt();
           }
           resampled[idx + 3] = 255;
@@ -880,7 +962,13 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     }
 
     final Completer<ui.Image> completer = Completer();
-    ui.decodeImageFromPixels(diffPixels, w, h, ui.PixelFormat.rgba8888, completer.complete);
+    ui.decodeImageFromPixels(
+      diffPixels,
+      w,
+      h,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
     final ui.Image heatmap = await completer.future;
 
     if (mounted) {
@@ -993,7 +1081,9 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                 Expanded(
                   child: CustomPaint(
                     size: const Size(double.infinity, 26),
-                    painter: _FrameLatencyGraphPainter(timings: _timingHistory.toList()),
+                    painter: _FrameLatencyGraphPainter(
+                      timings: _timingHistory.toList(),
+                    ),
                   ),
                 ),
               ],
@@ -1032,7 +1122,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
           side: BorderSide(color: isSelected ? activeColor : Colors.white24),
         ),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+      ),
     );
   }
 
@@ -1092,7 +1185,9 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
 
         // 60 FPS Scroll Toggle
         ElevatedButton.icon(
-          onPressed: _is60FpsScrolling ? _stop60FpsScroll : () => _start60FpsScroll(300.0),
+          onPressed: _is60FpsScrolling
+              ? _stop60FpsScroll
+              : () => _start60FpsScroll(300.0),
           style: ElevatedButton.styleFrom(
             backgroundColor: _is60FpsScrolling
                 ? Colors.deepOrangeAccent
@@ -1100,7 +1195,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           ),
-          icon: Icon(_is60FpsScrolling ? Icons.pause : Icons.fast_forward, size: 16),
+          icon: Icon(
+            _is60FpsScrolling ? Icons.pause : Icons.fast_forward,
+            size: 16,
+          ),
           label: Text(
             _is60FpsScrolling ? 'Stop 60 FPS' : '60 FPS Scroll Demo',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
@@ -1180,7 +1278,11 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
           children: [
             const Text(
               'Benchmark Mode:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white70),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Colors.white70,
+              ),
             ),
             const SizedBox(width: 10),
             _buildBenchmarkSubTab(
@@ -1207,7 +1309,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purpleAccent.shade700,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                 ),
                 icon: const Icon(Icons.table_chart, size: 14),
                 label: const Text(
@@ -1223,7 +1328,11 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
           children: [
             const Text(
               'Scroll Speed:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.cyanAccent),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Colors.cyanAccent,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1260,20 +1369,29 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigoAccent,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
               ),
               icon: _isBenchmarking
                   ? const SizedBox(
                       width: 12,
                       height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.timer, size: 16),
               label: Text(
                 _isBenchmarking
                     ? 'Testing (${_benchmarkSecondsRemaining}s)...'
                     : '▶ Run 5s Benchmark',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
             ),
           ],
@@ -1282,7 +1400,11 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildBenchmarkSubTab(String label, BenchmarkMode mode, Color activeColor) {
+  Widget _buildBenchmarkSubTab(
+    String label,
+    BenchmarkMode mode,
+    Color activeColor,
+  ) {
     final bool isSelected = _benchmarkMode == mode;
     return ElevatedButton(
       onPressed: () {
@@ -1306,7 +1428,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
           side: BorderSide(color: isSelected ? activeColor : Colors.white24),
         ),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+      ),
     );
   }
 
@@ -1338,7 +1463,11 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                   ),
                 ),
               ),
-              _buildDiagnosticPill('Frame #', '$_simulatedFrameNumber', Colors.white70),
+              _buildDiagnosticPill(
+                'Frame #',
+                '$_simulatedFrameNumber',
+                Colors.white70,
+              ),
               const SizedBox(width: 6),
               _buildDiagnosticPill(
                 'Offset Y',
@@ -1346,9 +1475,17 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                 Colors.cyanAccent,
               ),
               const SizedBox(width: 6),
-              _buildDiagnosticPill('Phase Bin', 'Bin $currentBin', Colors.tealAccent),
+              _buildDiagnosticPill(
+                'Phase Bin',
+                'Bin $currentBin',
+                Colors.tealAccent,
+              ),
               const SizedBox(width: 6),
-              _buildDiagnosticPill('Rasterize Count', '$_rasterizeCount', Colors.amberAccent),
+              _buildDiagnosticPill(
+                'Rasterize Count',
+                '$_rasterizeCount',
+                Colors.amberAccent,
+              ),
             ],
           ),
         ),
@@ -1384,7 +1521,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                           top: 8,
                           right: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black87,
                               borderRadius: BorderRadius.circular(4),
@@ -1428,13 +1568,19 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                       children: [
                         if (_diffHeatmap != null)
                           Center(
-                            child: RawImage(image: _diffHeatmap!, fit: BoxFit.contain),
+                            child: RawImage(
+                              image: _diffHeatmap!,
+                              fit: BoxFit.contain,
+                            ),
                           ),
                         Positioned(
                           top: 8,
                           left: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black87,
                               borderRadius: BorderRadius.circular(4),
@@ -1443,18 +1589,32 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(width: 10, height: 10, color: const Color(0xFF0D1117)),
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  color: const Color(0xFF0D1117),
+                                ),
                                 const SizedBox(width: 4),
                                 const Text(
                                   'Dark: 0 Error (Identical)',
-                                  style: TextStyle(fontSize: 10, color: Colors.white70),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white70,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
-                                Container(width: 10, height: 10, color: Colors.pinkAccent),
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  color: Colors.pinkAccent,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   'Neon Magenta/Yellow: Bilinear Smear Distortion (${_distortedPixelCount}px)',
-                                  style: const TextStyle(fontSize: 10, color: Colors.white70),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white70,
+                                  ),
                                 ),
                               ],
                             ),
@@ -1490,7 +1650,7 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                 border: Border.all(color: Colors.white12),
               ),
               child: Row(
-                mainAxisAlignment: dynamic_whitespace_align(MainAxisAlignment.spaceBetween),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     '#$index',
@@ -1510,7 +1670,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                       letterSpacing: 2.0,
                     ),
                   ),
-                  const Text('10 chars', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                  const Text(
+                    '10 chars',
+                    style: TextStyle(fontSize: 11, color: Colors.white38),
+                  ),
                 ],
               ),
             );
@@ -1528,7 +1691,9 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
               decoration: BoxDecoration(
                 color: const Color(0xFF161B22),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: Colors.amberAccent.withValues(alpha: 0.3),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1536,7 +1701,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.amber.shade900,
                           borderRadius: BorderRadius.circular(4),
@@ -1585,7 +1753,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
               decoration: BoxDecoration(
                 color: const Color(0xFF161B22),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.4), width: 1.5),
+                border: Border.all(
+                  color: Colors.greenAccent.withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1594,7 +1765,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.green.shade900,
                           borderRadius: BorderRadius.circular(4),
@@ -1633,16 +1807,20 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
     }
   }
 
-  MainAxisAlignment dynamic_whitespace_align(MainAxisAlignment alignment) => alignment;
-
   Widget _buildDiagnosticPill(String label, String value, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(
+        color: Colors.white10,
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: const TextStyle(fontSize: 10, color: Colors.white54)),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontSize: 10, color: Colors.white54),
+          ),
           Text(
             value,
             style: TextStyle(
@@ -1668,7 +1846,10 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: const TextStyle(fontSize: 11, color: Colors.white60)),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontSize: 11, color: Colors.white60),
+          ),
           Text(
             value,
             style: TextStyle(
@@ -1698,12 +1879,17 @@ class _MainDemoScreenState extends State<MainDemoScreen> with SingleTickerProvid
         },
         style: OutlinedButton.styleFrom(
           foregroundColor: isSelected ? Colors.cyanAccent : Colors.white70,
-          side: BorderSide(color: isSelected ? Colors.cyanAccent : Colors.white24),
+          side: BorderSide(
+            color: isSelected ? Colors.cyanAccent : Colors.white24,
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -1727,7 +1913,8 @@ class _DemoParagraphPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DemoParagraphPainter oldDelegate) {
-    return oldDelegate.offsetY != offsetY || oldDelegate.isScrolling != isScrolling;
+    return oldDelegate.offsetY != offsetY ||
+        oldDelegate.isScrolling != isScrolling;
   }
 }
 
@@ -1746,7 +1933,11 @@ class _FrameLatencyGraphPainter extends CustomPainter {
 
     const double maxMs = 35.0;
     final double targetY = size.height * (1.0 - (16.67 / maxMs));
-    canvas.drawLine(Offset(0, targetY), Offset(size.width, targetY), targetPaint);
+    canvas.drawLine(
+      Offset(0, targetY),
+      Offset(size.width, targetY),
+      targetPaint,
+    );
 
     final double stepX = size.width / math.max(1, timings.length - 1);
     final greenPaint = Paint()
