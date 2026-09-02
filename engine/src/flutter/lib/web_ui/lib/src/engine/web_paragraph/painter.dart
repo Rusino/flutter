@@ -46,17 +46,9 @@ void _resizePaintCanvas(ui.Rect rect, double effectiveScaleX, double effectiveSc
   return (sourceRect, targetRect);
 }
 
-double _calculateShift(double minShift, double targetFrac) {
-  double shift = minShift.floorToDouble() + targetFrac;
-  if (shift < minShift) {
-    shift += 1.0;
-  }
-  return shift;
-}
-
 /// Calculates the source and target rectangles, and the 2D canvas shift
-/// /// for a paragraph, combining the device pixel ratio and canvas transform.
-/// This is used for testing the subpixel alignment and caching logic.
+/// for a paragraph, combining the device pixel ratio and canvas transform.
+/// This is used for testing the pixel alignment and caching logic.
 @visibleForTesting
 (ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) calculateParagraphForTest(
   WebParagraph paragraph,
@@ -89,9 +81,12 @@ double _calculateShift(double minShift, double targetFrac) {
   final double effectiveScaleX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
   final double effectiveScaleY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
 
-  // Convert physical offset: transformX/Y are in logical screen space (scale by devicePixelRatio, not effectiveScale)
-  final double physicalOffsetX = offset.dx * effectiveScaleX + transformX * devicePixelRatio;
-  final double physicalOffsetY = offset.dy * effectiveScaleY + transformY * devicePixelRatio;
+  // Snap physical screen offset to the nearest integer device pixel (effectively Bin 0).
+  final double physicalOffsetX = (offset.dx * effectiveScaleX + transformX * devicePixelRatio)
+      .roundToDouble();
+  final double physicalOffsetY = (offset.dy * effectiveScaleY + transformY * devicePixelRatio)
+      .roundToDouble();
+
   final physicalPaintBounds = ui.Rect.fromLTRB(
     paragraph.paintBounds.left * effectiveScaleX,
     paragraph.paintBounds.top * effectiveScaleY,
@@ -99,14 +94,9 @@ double _calculateShift(double minShift, double targetFrac) {
     paragraph.paintBounds.bottom * effectiveScaleY,
   );
 
-  // Match horizontal and vertical subpixel phase in physical device pixels
-  final double targetFracX = physicalOffsetX - physicalOffsetX.floorToDouble();
-  final double minShiftX = -physicalPaintBounds.left;
-  final double shiftPhysicalX = _calculateShift(minShiftX, targetFracX);
-
-  final double targetFracY = physicalOffsetY - physicalOffsetY.floorToDouble();
-  final double minShiftY = -physicalPaintBounds.top;
-  final double shiftPhysicalY = _calculateShift(minShiftY, targetFracY);
+  // Canvas2D translation shift (always integer device pixels, phase = 0.0)
+  final double shiftPhysicalX = (-physicalPaintBounds.left).ceilToDouble();
+  final double shiftPhysicalY = (-physicalPaintBounds.top).ceilToDouble();
 
   // Add 2 physical pixels of safety padding so font antialiasing bleeding at the bottom/right edges is not clipped
   const kAntialiasingPadding = 2.0;
@@ -119,9 +109,12 @@ double _calculateShift(double minShift, double targetFrac) {
   final sourceRect = ui.Rect.fromLTWH(0, 0, physicalWidth, physicalHeight);
 
   // Target rect in local canvas units:
+  // Map physical integer destination coordinates back to local canvas space
+  final double screenLeft = physicalOffsetX - shiftPhysicalX;
+  final double screenTop = physicalOffsetY - shiftPhysicalY;
   final targetRect = ui.Rect.fromLTWH(
-    offset.dx - shiftPhysicalX / effectiveScaleX,
-    offset.dy - shiftPhysicalY / effectiveScaleY,
+    (screenLeft - transformX * devicePixelRatio) / effectiveScaleX,
+    (screenTop - transformY * devicePixelRatio) / effectiveScaleY,
     physicalWidth / effectiveScaleX,
     physicalHeight / effectiveScaleY,
   );
