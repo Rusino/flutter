@@ -46,6 +46,124 @@ void _resizePaintCanvas(ui.Rect rect, double effectiveScaleX, double effectiveSc
   return (sourceRect, targetRect);
 }
 
+/// Represents the combined geometry of the canvas transformation matrix and device pixel ratio,
+/// providing physical-to-local coordinate snapping and projection for WebParagraph painting.
+class _ParagraphTransform {
+  _ParagraphTransform({
+    required this.effectiveScaleX,
+    required this.effectiveScaleY,
+    required this.transformX,
+    required this.transformY,
+    required this.devicePixelRatio,
+  });
+
+  factory _ParagraphTransform.from(Float64List? transform, double devicePixelRatio) {
+    if (transform == null) {
+      return _ParagraphTransform(
+        effectiveScaleX: devicePixelRatio,
+        effectiveScaleY: devicePixelRatio,
+        transformX: 0.0,
+        transformY: 0.0,
+        devicePixelRatio: devicePixelRatio,
+      );
+    }
+
+    final double matrixScaleX = math.sqrt(
+      transform[0] * transform[0] + transform[1] * transform[1],
+    );
+    final double matrixScaleY = math.sqrt(
+      transform[4] * transform[4] + transform[5] * transform[5],
+    );
+
+    return _ParagraphTransform(
+      effectiveScaleX: devicePixelRatio * (matrixScaleX > 0 ? matrixScaleX : 1.0),
+      effectiveScaleY: devicePixelRatio * (matrixScaleY > 0 ? matrixScaleY : 1.0),
+      transformX: transform[12],
+      transformY: transform[13],
+      devicePixelRatio: devicePixelRatio,
+    );
+  }
+
+  final double effectiveScaleX;
+  final double effectiveScaleY;
+  final double transformX;
+  final double transformY;
+  final double devicePixelRatio;
+
+  /// Snaps a logical [offset] to the nearest whole integer device pixel on screen.
+  (double physicalX, double physicalY) snapOffset(ui.Offset offset) {
+    return (
+      (offset.dx * effectiveScaleX + transformX * devicePixelRatio).roundToDouble(),
+      (offset.dy * effectiveScaleY + transformY * devicePixelRatio).roundToDouble(),
+    );
+  }
+
+  /// Maps a physical screen rectangle back to local canvas coordinates.
+  ui.Rect toLocalRect({
+    required double physicalLeft,
+    required double physicalTop,
+    required double physicalWidth,
+    required double physicalHeight,
+  }) {
+    return ui.Rect.fromLTWH(
+      (physicalLeft - transformX * devicePixelRatio) / effectiveScaleX,
+      (physicalTop - transformY * devicePixelRatio) / effectiveScaleY,
+      physicalWidth / effectiveScaleX,
+      physicalHeight / effectiveScaleY,
+    );
+  }
+
+  /// Snaps a logical [rect] to whole integer physical device pixels,
+  /// returning the rectangle in local canvas coordinates.
+  ui.Rect snapRect(ui.Rect rect) {
+    final double physicalLeft = (rect.left * effectiveScaleX + transformX * devicePixelRatio)
+        .roundToDouble();
+    final double physicalTop = (rect.top * effectiveScaleY + transformY * devicePixelRatio)
+        .roundToDouble();
+    final double physicalRight = (rect.right * effectiveScaleX + transformX * devicePixelRatio)
+        .roundToDouble();
+    final double physicalBottom = (rect.bottom * effectiveScaleY + transformY * devicePixelRatio)
+        .roundToDouble();
+
+    return ui.Rect.fromLTRB(
+      (physicalLeft - transformX * devicePixelRatio) / effectiveScaleX,
+      (physicalTop - transformY * devicePixelRatio) / effectiveScaleY,
+      (physicalRight - transformX * devicePixelRatio) / effectiveScaleX,
+      (physicalBottom - transformY * devicePixelRatio) / effectiveScaleY,
+    );
+  }
+}
+
+/// Exposed for testing the computation of effective scale factors.
+@visibleForTesting
+(double effectiveScaleX, double effectiveScaleY) computeEffectiveScaleForTest(
+  Float64List? transform,
+  double devicePixelRatio,
+) {
+  final paragraphTransform = _ParagraphTransform.from(transform, devicePixelRatio);
+  return (paragraphTransform.effectiveScaleX, paragraphTransform.effectiveScaleY);
+}
+
+/// Exposed for testing the physical snapping of background rects.
+@visibleForTesting
+ui.Rect snapRectToPhysicalPixelsForTest(
+  ui.Rect rect,
+  double effectiveScaleX,
+  double effectiveScaleY, [
+  double transformX = 0.0,
+  double transformY = 0.0,
+  double dpr = 1.0,
+]) {
+  final transform = _ParagraphTransform(
+    effectiveScaleX: effectiveScaleX,
+    effectiveScaleY: effectiveScaleY,
+    transformX: transformX,
+    transformY: transformY,
+    devicePixelRatio: dpr,
+  );
+  return transform.snapRect(rect);
+}
+
 /// Calculates the source and target rectangles, and the 2D canvas shift
 /// for a paragraph, combining the device pixel ratio and canvas transform.
 /// This is used for testing the pixel alignment and caching logic.
@@ -56,13 +174,8 @@ void _resizePaintCanvas(ui.Rect rect, double effectiveScaleX, double effectiveSc
   double devicePixelRatio, [
   Float64List? canvasTransform,
 ]) {
-  final double scaleX = canvasTransform != null
-      ? math.sqrt(canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1])
-      : 1.0;
-  final double scaleY = canvasTransform != null
-      ? math.sqrt(canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5])
-      : 1.0;
-  return _calculateParagraph(paragraph, offset, devicePixelRatio, scaleX, scaleY, canvasTransform);
+  final transform = _ParagraphTransform.from(canvasTransform, devicePixelRatio);
+  return _calculateParagraph(paragraph, offset, transform);
 }
 
 /// Calculates the source (on Canvas2D) and target (on the output canvas) rectangles for the entire paragraph,
@@ -70,28 +183,15 @@ void _resizePaintCanvas(ui.Rect rect, double effectiveScaleX, double effectiveSc
 (ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) _calculateParagraph(
   WebParagraph paragraph,
   ui.Offset offset,
-  double devicePixelRatio,
-  double scaleX,
-  double scaleY, [
-  Float64List? canvasTransform,
-]) {
-  final double transformX = canvasTransform != null ? canvasTransform[12] : 0.0;
-  final double transformY = canvasTransform != null ? canvasTransform[13] : 0.0;
-
-  final double effectiveScaleX = devicePixelRatio * (scaleX > 0 ? scaleX : 1.0);
-  final double effectiveScaleY = devicePixelRatio * (scaleY > 0 ? scaleY : 1.0);
-
-  // Snap physical screen offset to the nearest integer device pixel (effectively Bin 0).
-  final double physicalOffsetX = (offset.dx * effectiveScaleX + transformX * devicePixelRatio)
-      .roundToDouble();
-  final double physicalOffsetY = (offset.dy * effectiveScaleY + transformY * devicePixelRatio)
-      .roundToDouble();
+  _ParagraphTransform transform,
+) {
+  final (double physicalOffsetX, double physicalOffsetY) = transform.snapOffset(offset);
 
   final physicalPaintBounds = ui.Rect.fromLTRB(
-    paragraph.paintBounds.left * effectiveScaleX,
-    paragraph.paintBounds.top * effectiveScaleY,
-    paragraph.paintBounds.right * effectiveScaleX,
-    paragraph.paintBounds.bottom * effectiveScaleY,
+    paragraph.paintBounds.left * transform.effectiveScaleX,
+    paragraph.paintBounds.top * transform.effectiveScaleY,
+    paragraph.paintBounds.right * transform.effectiveScaleX,
+    paragraph.paintBounds.bottom * transform.effectiveScaleY,
   );
 
   // Canvas2D translation shift (always integer device pixels, phase = 0.0)
@@ -112,17 +212,17 @@ void _resizePaintCanvas(ui.Rect rect, double effectiveScaleX, double effectiveSc
   // Map physical integer destination coordinates back to local canvas space
   final double screenLeft = physicalOffsetX - shiftPhysicalX;
   final double screenTop = physicalOffsetY - shiftPhysicalY;
-  final targetRect = ui.Rect.fromLTWH(
-    (screenLeft - transformX * devicePixelRatio) / effectiveScaleX,
-    (screenTop - transformY * devicePixelRatio) / effectiveScaleY,
-    physicalWidth / effectiveScaleX,
-    physicalHeight / effectiveScaleY,
+  final ui.Rect targetRect = transform.toLocalRect(
+    physicalLeft: screenLeft,
+    physicalTop: screenTop,
+    physicalWidth: physicalWidth,
+    physicalHeight: physicalHeight,
   );
 
   // Convert shift to logical units for Canvas2D context translation
   final canvas2dShift = ui.Offset(
-    shiftPhysicalX / effectiveScaleX,
-    shiftPhysicalY / effectiveScaleY,
+    shiftPhysicalX / transform.effectiveScaleX,
+    shiftPhysicalY / transform.effectiveScaleY,
   );
 
   return (sourceRect, targetRect, canvas2dShift);
@@ -143,7 +243,12 @@ abstract class WebParagraphPainter {
   /// The number of times this painter has rasterized the paragraph, exposed for testing.
   int get debugRasterizeCount => 0;
 
-  void _paintAllBlocks(StyleElements styleElement, ui.Canvas canvas, ui.Offset offset) {
+  void _paintAllBlocks(
+    StyleElements styleElement,
+    ui.Canvas canvas,
+    ui.Offset offset,
+    _ParagraphTransform transform,
+  ) {
     for (final TextLine line in _paragraph.getLayout().lines) {
       for (final LineBlock block in line.visualBlocks) {
         if (block is PlaceholderBlock) {
@@ -171,7 +276,7 @@ abstract class WebParagraphPainter {
               targetRect.width,
               block.multipliedHeight,
             );
-            _paintBlockBackground(canvas, correctedTargetRect, block.style.background!);
+            _paintBlockBackground(canvas, correctedTargetRect, block.style.background!, transform);
           case StyleElements.decorations:
           case StyleElements.shadows:
           case StyleElements.text:
@@ -182,18 +287,16 @@ abstract class WebParagraphPainter {
   }
 
   /// Paints the background of a [TextBlock] on a [ui.Canvas].
-  void _paintBlockBackground(ui.Canvas canvas, ui.Rect rect, ui.Paint paint) {
-    // We need to snap the block edges because Skia draws rectangles with subpixel accuracy
-    // and we end up with overlaps (this is only a problem when colors have transparency)
-    // or gaps between blocks (which looks unacceptable - vertical lines between blocks).
-    // Whether we snap to floor or ceil is irrelevant as long as we are consistent on both sides
-    // (and will possibly have problems when glyph boundaries are outside of advance rectangles)
-    final snappedRect = ui.Rect.fromLTRB(
-      rect.left.roundToDouble(),
-      rect.top.roundToDouble(),
-      rect.right.roundToDouble(),
-      rect.bottom.roundToDouble(),
-    );
+  void _paintBlockBackground(
+    ui.Canvas canvas,
+    ui.Rect rect,
+    ui.Paint paint,
+    _ParagraphTransform transform,
+  ) {
+    // We snap the block edges to whole physical screen pixels to prevent
+    // subpixel rendering overlaps (which causes artifacts when colors have
+    // transparency) or gaps between blocks.
+    final ui.Rect snappedRect = transform.snapRect(rect);
     canvas.drawRect(snappedRect, paint);
   }
 
@@ -205,23 +308,13 @@ abstract class WebParagraphPainter {
 
     final TextLayout layout = _paragraph.getLayout();
     final Float64List canvasTransform = canvas.getTransform();
-
-    // Calculate scale from transformation matrix
-    final double scaleX = math.sqrt(
-      canvasTransform[0] * canvasTransform[0] + canvasTransform[1] * canvasTransform[1],
-    );
-    final double scaleY = math.sqrt(
-      canvasTransform[4] * canvasTransform[4] + canvasTransform[5] * canvasTransform[5],
-    );
     final double dpr = ui.window.devicePixelRatio;
+    final transform = _ParagraphTransform.from(canvasTransform, dpr);
 
     final (ui.Rect sourceRect, ui.Rect targetRect, ui.Offset canvas2dShift) = _calculateParagraph(
       _paragraph,
       offset,
-      dpr,
-      scaleX,
-      scaleY,
-      canvasTransform,
+      transform,
     );
 
     const epsilon = 0.001;
@@ -231,23 +324,18 @@ abstract class WebParagraphPainter {
     }
 
     // Draw background blocks directly on the output canvas
-    // so it will be cached together with the text blocks on Canvas2D canvas
-    _paintAllBlocks(StyleElements.background, canvas, offset);
-
-    // Effective scale combines device pixel ratio with canvas matrix scale.
-    final double effectiveScaleX = dpr * (scaleX > 0 ? scaleX : 1.0);
-    final double effectiveScaleY = dpr * (scaleY > 0 ? scaleY : 1.0);
+    _paintAllBlocks(StyleElements.background, canvas, offset, transform);
 
     paintParagraphText(
       canvas,
       sourceRect,
       targetRect,
-      effectiveScaleX: effectiveScaleX,
-      effectiveScaleY: effectiveScaleY,
+      effectiveScaleX: transform.effectiveScaleX,
+      effectiveScaleY: transform.effectiveScaleY,
       canvas2dShift: canvas2dShift,
       offset: offset,
       generateParagraphImage: () {
-        _resizePaintCanvas(sourceRect, effectiveScaleX, effectiveScaleY);
+        _resizePaintCanvas(sourceRect, transform.effectiveScaleX, transform.effectiveScaleY);
 
         // We translate Canvas2D context by canvas2dShift in logical units
         _paintContext.translate(canvas2dShift.dx, canvas2dShift.dy);

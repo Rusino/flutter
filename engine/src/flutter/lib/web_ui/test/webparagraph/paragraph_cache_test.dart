@@ -486,4 +486,167 @@ Future<void> testMain() async {
       EngineFlutterDisplay.instance.debugOverrideDevicePixelRatio(originalDpr);
     }
   });
+
+  test('WebParagraph snaps background rects to integer physical device pixels without gaps', () {
+    for (final dpr in <double>[1.0, 1.5, 2.0, 2.5]) {
+      const scaleX = 1.25;
+      const scaleY = 1.25;
+      final double effectiveScaleX = dpr * scaleX;
+      final double effectiveScaleY = dpr * scaleY;
+      const transformX = 15.35;
+      const transformY = 25.65;
+
+      // Two adjacent blocks on the same line: block1 ends where block2 begins
+      const block1Rect = Rect.fromLTRB(10.25, 20.35, 35.65, 45.85);
+      const block2Rect = Rect.fromLTRB(35.65, 20.35, 70.15, 45.85);
+
+      final Rect snapped1 = snapRectToPhysicalPixelsForTest(
+        block1Rect,
+        effectiveScaleX,
+        effectiveScaleY,
+        transformX,
+        transformY,
+        dpr,
+      );
+      final Rect snapped2 = snapRectToPhysicalPixelsForTest(
+        block2Rect,
+        effectiveScaleX,
+        effectiveScaleY,
+        transformX,
+        transformY,
+        dpr,
+      );
+
+      // Verify physical screen coordinates are exact integers
+      final double physLeft1 = snapped1.left * effectiveScaleX + transformX * dpr;
+      final double physRight1 = snapped1.right * effectiveScaleX + transformX * dpr;
+      final double physTop1 = snapped1.top * effectiveScaleY + transformY * dpr;
+      final double physBottom1 = snapped1.bottom * effectiveScaleY + transformY * dpr;
+
+      expect(physLeft1 % 1.0, closeTo(0.0, epsilon));
+      expect(physRight1 % 1.0, closeTo(0.0, epsilon));
+      expect(physTop1 % 1.0, closeTo(0.0, epsilon));
+      expect(physBottom1 % 1.0, closeTo(0.0, epsilon));
+
+      final double physLeft2 = snapped2.left * effectiveScaleX + transformX * dpr;
+      final double physRight2 = snapped2.right * effectiveScaleX + transformX * dpr;
+      final double physTop2 = snapped2.top * effectiveScaleY + transformY * dpr;
+      final double physBottom2 = snapped2.bottom * effectiveScaleY + transformY * dpr;
+
+      expect(physLeft2 % 1.0, closeTo(0.0, epsilon));
+      expect(physRight2 % 1.0, closeTo(0.0, epsilon));
+      expect(physTop2 % 1.0, closeTo(0.0, epsilon));
+      expect(physBottom2 % 1.0, closeTo(0.0, epsilon));
+
+      // Verify seamless boundary between adjacent blocks (no gap, no overlap)
+      expect(physRight1, closeTo(physLeft2, epsilon));
+      expect(snapped1.right, closeTo(snapped2.left, epsilon));
+    }
+  });
+
+  test(
+    'computeEffectiveScaleForTest correctly extracts scale from matrix and handles rotations and nulls',
+    () {
+      const dpr = 2.0;
+
+      // Null transform: returns (dpr, dpr)
+      final (double nullScaleX, double nullScaleY) = computeEffectiveScaleForTest(null, dpr);
+      expect(nullScaleX, closeTo(2.0, epsilon));
+      expect(nullScaleY, closeTo(2.0, epsilon));
+
+      // Identity transform
+      final identity = Float64List.fromList(<double>[
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+      ]);
+      final (double idScaleX, double idScaleY) = computeEffectiveScaleForTest(identity, dpr);
+      expect(idScaleX, closeTo(2.0, epsilon));
+      expect(idScaleY, closeTo(2.0, epsilon));
+
+      // Uniform scale 1.5x
+      final uniform = Float64List.fromList(<double>[
+        1.5,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.5,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        10.0,
+        20.0,
+        0.0,
+        1.0,
+      ]);
+      final (double uniScaleX, double uniScaleY) = computeEffectiveScaleForTest(uniform, dpr);
+      expect(uniScaleX, closeTo(3.0, epsilon));
+      expect(uniScaleY, closeTo(3.0, epsilon));
+
+      // 45 degree rotation: cos(pi/4) = sin(pi/4) = 1/sqrt(2)
+      final double cos45 = math.cos(math.pi / 4);
+      final double sin45 = math.sin(math.pi / 4);
+      final rot45 = Float64List.fromList(<double>[
+        cos45,
+        sin45,
+        0.0,
+        0.0,
+        -sin45,
+        cos45,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+      ]);
+      final (double rotScaleX, double rotScaleY) = computeEffectiveScaleForTest(rot45, dpr);
+      expect(rotScaleX, closeTo(2.0, epsilon));
+      expect(rotScaleY, closeTo(2.0, epsilon));
+
+      // Non-uniform scale with zero fallback
+      final nonUniformZero = Float64List.fromList(<double>[
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.5,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+      ]);
+      final (double nzScaleX, double nzScaleY) = computeEffectiveScaleForTest(nonUniformZero, dpr);
+      expect(nzScaleX, closeTo(2.0, epsilon)); // fallback to 1.0 * dpr
+      expect(nzScaleY, closeTo(5.0, epsilon));
+    },
+  );
 }
