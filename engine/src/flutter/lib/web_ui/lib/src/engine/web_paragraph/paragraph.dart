@@ -550,8 +550,29 @@ abstract class SharedTextStyle {
   double? get wordSpacing => null;
 
   String _buildCssFontString() {
-    final String cssFontStyle = fontStyle?.toCssString() ?? StyleManager.defaultFontStyle;
-    final String cssFontWeight = fontWeight?.toCssString() ?? StyleManager.defaultFontWeight;
+    String cssFontStyle = fontStyle?.toCssString() ?? StyleManager.defaultFontStyle;
+    String cssFontWeight = fontWeight?.toCssString() ?? StyleManager.defaultFontWeight;
+    // Map standard font variation axes into the CSS font shorthand string
+    // so standard weight and oblique angles take precedence over static styles.
+    if (fontVariations != null) {
+      // Iterate through variations to resolve wght, ital, and slnt.
+      for (final ui.FontVariation variation in fontVariations!) {
+        switch (variation.axis) {
+          case 'wght':
+            // Clamp weight to the valid CSS OpenType range 1..1000.
+            final double clamped = variation.value.clamp(1.0, 1000.0);
+            cssFontWeight = clamped == clamped.roundToDouble()
+                ? clamped.toInt().toString()
+                : clamped.toString();
+          case 'ital':
+            // Map ital variation threshold to italic or normal.
+            cssFontStyle = variation.value >= 0.5 ? 'italic' : 'normal';
+          case 'slnt':
+            // Negate angle per CSS Fonts Level 4 oblique slant definition.
+            cssFontStyle = variation.value == 0.0 ? 'normal' : 'oblique ${-variation.value}deg';
+        }
+      }
+    }
     final double cssFontSize = fontSize ?? StyleManager.defaultFontSize;
     final String cssFontFamily = fontFamily ?? StyleManager.defaultFontFamily;
     final String fullFontName = canonicalizeFontFamily(cssFontFamily, fontFamilyFallback)!;
@@ -570,12 +591,23 @@ abstract class SharedTextStyle {
     return locale != null ? locale!.toLanguageTag() : 'inherit';
   }
 
-  void _applyFontFeatures(DomCanvasRenderingContext2D context) {
-    if (fontFeatures == null) {
-      return;
+  // Applies font features to context.fontVariantCaps and canvas.style.fontFeatureSettings.
+  // Returns true if feature settings are active or were just cleared.
+  bool _applyFontFeatures(DomCanvasRenderingContext2D context) {
+    context.fontVariantCaps = 'normal';
+    final DomHTMLCanvasElement? canvas = context.canvas;
+    final String oldFeatureSettings = canvas?.style.fontFeatureSettings ?? '';
+    // Reset font feature settings on the canvas style when features are empty.
+    if (fontFeatures == null || fontFeatures!.isEmpty) {
+      if (oldFeatureSettings.isNotEmpty) {
+        canvas!.style.fontFeatureSettings = '';
+        return true;
+      }
+      return false;
     }
 
     final fontFeatureSettings = <ui.FontFeature>[];
+    // Map standard variant caps features directly to Canvas2D fontVariantCaps.
     for (final ui.FontFeature feature in fontFeatures!) {
       switch (feature.feature) {
         case 'smcp':
@@ -595,19 +627,62 @@ abstract class SharedTextStyle {
       }
     }
 
-    if (fontFeatureSettings.isNotEmpty) {
-      context.canvas!.style.fontFeatureSettings = fontFeatureListToCss(fontFeatureSettings);
+    // Format remaining features into CSS font-feature-settings syntax.
+    final String newFeatureSettings = fontFeatureSettings.isNotEmpty
+        ? fontFeatureListToCss(fontFeatureSettings)
+        : '';
+    if (canvas != null) {
+      if (newFeatureSettings != oldFeatureSettings) {
+        canvas.style.fontFeatureSettings = newFeatureSettings;
+      }
+      return newFeatureSettings.isNotEmpty || oldFeatureSettings.isNotEmpty;
     }
+    return false;
+  }
+
+  // Applies arbitrary custom OpenType variation axes to canvas.style.fontVariationSettings.
+  // Returns true if variation settings are active or were just cleared.
+  bool _applyFontVariations(DomCanvasRenderingContext2D context) {
+    final DomHTMLCanvasElement? canvas = context.canvas;
+    // Early exit if the context has no associated canvas element.
+    if (canvas == null) {
+      return false;
+    }
+    final String oldVariationSettings = canvas.style.fontVariationSettings;
+    // Format active variations into CSS font-variation-settings syntax.
+    final String newVariationSettings = (fontVariations != null && fontVariations!.isNotEmpty)
+        ? fontVariationListToCss(fontVariations!)
+        : '';
+    if (newVariationSettings != oldVariationSettings) {
+      canvas.style.fontVariationSettings = newVariationSettings;
+    }
+    return newVariationSettings.isNotEmpty || oldVariationSettings.isNotEmpty;
   }
 
   void applyToContext(DomCanvasRenderingContext2D context) {
-    // Setup all the font-affecting attributes
-    // Set 'lang' attribute as a combination of locale+language
+    // Canvas2D resolves font-feature-settings and font-variation-settings from
+    // the canvas element's ComputedStyle inside the context.font setter, which
+    // requires the canvas to be connected to the document at assignment time.
+    final bool needsFeatureStyle = _applyFontFeatures(context);
+    final bool needsVariationStyle = _applyFontVariations(context);
+    final DomHTMLCanvasElement? canvas = context.canvas;
+    // Connect the canvas element to document.body only while resolving ComputedStyle.
+    final bool attachTransiently =
+        (needsFeatureStyle || needsVariationStyle) &&
+        canvas != null &&
+        canvas.isConnected != true &&
+        domDocument.body != null;
+    if (attachTransiently) {
+      domDocument.body!.append(canvas);
+    }
     context.font = _buildCssFontString();
+    if (attachTransiently) {
+      // Disconnect immediately so document.body.children remains clean.
+      canvas.remove();
+    }
     context.letterSpacing = _buildLetterSpacingString();
     context.wordSpacing = _buildWordSpacingString();
     context.lang = _buildLangString();
-    _applyFontFeatures(context);
   }
 }
 

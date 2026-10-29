@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:typed_data';
+
 import 'package:test/bootstrap/browser.dart';
 import 'package:test/test.dart';
 import 'package:ui/ui.dart' as ui;
+import 'package:ui/ui_web/src/ui_web.dart' as ui_web;
 
+import '../common/fake_asset_manager.dart';
 import '../common/test_initialization.dart';
 
 final ui.ParagraphStyle ahemStyle = ui.ParagraphStyle(fontFamily: 'Arial', fontSize: 20);
@@ -830,6 +834,117 @@ Future<void> testMain() async {
             const ui.TextRange(start: 0, end: 4),
           );
         });
+      },
+    );
+  });
+
+  group('Variable Fonts', () {
+    double measureWidth(
+      String fontFamily,
+      String text, {
+      ui.FontWeight? fontWeight,
+      List<ui.FontVariation>? fontVariations,
+    }) {
+      final builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontFamily: fontFamily));
+      builder.pushStyle(
+        ui.TextStyle(
+          fontFamily: fontFamily,
+          fontSize: 100,
+          fontWeight: fontWeight,
+          fontVariations: fontVariations,
+        ),
+      );
+      builder.addText(text);
+      final ui.Paragraph paragraph = builder.build();
+      paragraph.layout(const ui.ParagraphConstraints(width: double.infinity));
+      return paragraph.maxIntrinsicWidth;
+    }
+
+    test('RobotoVariable metrics change with fontWeight', () {
+      final double w100 = measureWidth('RobotoVariable', 'Test', fontWeight: ui.FontWeight.w100);
+      final double w400 = measureWidth('RobotoVariable', 'Test', fontWeight: ui.FontWeight.w400);
+      final double w900 = measureWidth('RobotoVariable', 'Test', fontWeight: ui.FontWeight.w900);
+
+      expect(w100, lessThan(w400));
+      expect(w400, lessThan(w900));
+    });
+
+    test(
+      'Standard wght axis via fontVariations supports arbitrary weights and overrides fontWeight',
+      () {
+        final double w100 = measureWidth(
+          'RobotoVariable',
+          'Test',
+          fontVariations: const <ui.FontVariation>[ui.FontVariation('wght', 100)],
+        );
+        final double w550 = measureWidth(
+          'RobotoVariable',
+          'Test',
+          fontVariations: const <ui.FontVariation>[ui.FontVariation('wght', 550)],
+        );
+        final double w900 = measureWidth(
+          'RobotoVariable',
+          'Test',
+          fontVariations: const <ui.FontVariation>[ui.FontVariation('wght', 900)],
+        );
+        final double overrideW900 = measureWidth(
+          'RobotoVariable',
+          'Test',
+          fontWeight: ui.FontWeight.w100,
+          fontVariations: const <ui.FontVariation>[ui.FontVariation('wght', 900)],
+        );
+        final double afterResetW100 = measureWidth(
+          'RobotoVariable',
+          'Test',
+          fontWeight: ui.FontWeight.w100,
+        );
+
+        expect(w100, lessThan(w550));
+        expect(w550, lessThan(w900));
+        expect(overrideW900, equals(w900));
+        expect(afterResetW100, equals(w100));
+      },
+    );
+
+    test(
+      'Custom OpenType axis via fontVariations changes metrics and resets across spans',
+      () async {
+        final ByteData rawData = await ui_web.assetManager.load(robotoVariableFontUrl);
+        final customFontBytes = Uint8List.fromList(
+          rawData.buffer.asUint8List(rawData.offsetInBytes, rawData.lengthInBytes),
+        );
+        // Rename the 'wght' (0x77, 0x67, 0x68, 0x74) tag in the font binary to a custom
+        // unregistered axis tag 'CUST' (0x43, 0x55, 0x53, 0x54) so CSS font-weight cannot drive it.
+        for (var i = 0; i <= customFontBytes.length - 4; i++) {
+          if (customFontBytes[i] == 0x77 &&
+              customFontBytes[i + 1] == 0x67 &&
+              customFontBytes[i + 2] == 0x68 &&
+              customFontBytes[i + 3] == 0x74) {
+            customFontBytes[i] = 0x43;
+            customFontBytes[i + 1] = 0x55;
+            customFontBytes[i + 2] = 0x53;
+            customFontBytes[i + 3] = 0x54;
+          }
+        }
+
+        await ui.loadFontFromList(customFontBytes, fontFamily: 'RobotoCustomAxis');
+
+        final double wCust100 = measureWidth(
+          'RobotoCustomAxis',
+          'Test',
+          fontVariations: const <ui.FontVariation>[ui.FontVariation('CUST', 100)],
+        );
+        final double wCust400Default = measureWidth('RobotoCustomAxis', 'Test');
+        final double wCust900 = measureWidth(
+          'RobotoCustomAxis',
+          'Test',
+          fontVariations: const <ui.FontVariation>[ui.FontVariation('CUST', 900)],
+        );
+        final double wCustReset = measureWidth('RobotoCustomAxis', 'Test');
+
+        expect(wCust100, lessThan(wCust400Default));
+        expect(wCust400Default, lessThan(wCust900));
+        expect(wCustReset, equals(wCust400Default));
       },
     );
   });

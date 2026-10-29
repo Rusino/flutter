@@ -89,10 +89,34 @@ class WebFontCollection implements FlutterFontCollection {
     String asset,
     Map<String, String> descriptors,
   ) async {
+    final ByteData data;
     try {
+      // Fetch the font binary upfront so OpenType fvar axes can be inspected
+      // before constructing the browser FontFace.
+      data = await ui_web.assetManager.load(asset);
+    } on HttpFetchNoPayloadError {
+      return FontNotFoundError(asset);
+    } catch (e) {
+      return FontDownloadError(asset, e);
+    }
+
+    try {
+      final Uint8List list = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final Map<String, String> varDescriptors = _extractVariableDescriptors(list);
+      // Populate descriptors from fvar axes if not explicitly specified in the manifest.
+      if (varDescriptors.isNotEmpty) {
+        descriptors = Map<String, String>.of(descriptors);
+        varDescriptors.forEach((String key, String value) {
+          if (!descriptors.containsKey(key)) {
+            descriptors[key] = value;
+          }
+        });
+      }
+
       // Right now, this is only used in Chrome which accepts unquoted font family names.
       // However, in the future, we should examine other browsers and see if they require
       // quoting for certain font family names.
+      // Pass the URL and merged variable axis descriptors to FontFace.
       final DomFontFace fontFace = await _loadFontFace(family, asset, descriptors);
       domDocument.fonts!.add(fontFace);
     } on FontLoadError catch (error) {
@@ -108,7 +132,7 @@ class WebFontCollection implements FlutterFontCollection {
     String asset,
     Map<String, String> descriptors,
   ) async {
-    // try/catch because `new FontFace` can crash with an improper font family.
+    // Catch font parsing or download errors from createDomFontFace or fontFace.load.
     try {
       final DomFontFace fontFace = createDomFontFace(
         family,
@@ -127,7 +151,13 @@ class WebFontCollection implements FlutterFontCollection {
     // Since these fonts are loaded by user code, surface the error
     // through the returned future.
     try {
-      final DomFontFace fontFace = createDomFontFace(family, list);
+      // Inspect variable font axes to allow arbitrary weights for in-memory fonts.
+      Map<String, String>? descriptors;
+      final Map<String, String> varDescriptors = _extractVariableDescriptors(list);
+      if (varDescriptors.isNotEmpty) {
+        descriptors = varDescriptors;
+      }
+      final DomFontFace fontFace = createDomFontFace(family, list, descriptors);
       if (fontFace.status == 'error') {
         // Font failed to load.
         return false;
@@ -144,6 +174,98 @@ class WebFontCollection implements FlutterFontCollection {
       return false;
     }
     return true;
+  }
+
+  // Extracts variable font axis ranges from the OpenType fvar table.
+  // Browser FontFace defaults to static weight 400 unless explicit ranges are provided.
+  Map<String, String> _extractVariableDescriptors(Uint8List bytes) {
+    final descriptors = <String, String>{};
+    if (bytes.lengthInBytes < 12) {
+      return descriptors;
+    }
+
+    final data = ByteData.sublistView(bytes);
+    final int sfntVersion = data.getUint32(0);
+    var fontOffset = 0;
+
+    if (sfntVersion == 0x74746366) {
+      // TrueType Collection ('ttcf') header.
+      if (bytes.lengthInBytes < 16) {
+        return descriptors;
+      }
+      final int numFonts = data.getUint32(8);
+      if (numFonts > 0) {
+        fontOffset = data.getUint32(12);
+      } else {
+        return descriptors;
+      }
+    }
+
+    if (fontOffset + 12 > data.lengthInBytes) {
+      return descriptors;
+    }
+    final int numTables = data.getUint16(fontOffset + 4);
+
+    var fvarOffset = 0;
+    for (var i = 0; i < numTables; i++) {
+      final int tableOffset = fontOffset + 12 + i * 16;
+      if (tableOffset + 16 > data.lengthInBytes) {
+        return descriptors;
+      }
+      final int tag = data.getUint32(tableOffset);
+      if (tag == 0x66766172) {
+        // OpenType Font Variations ('fvar') table.
+        fvarOffset = data.getUint32(tableOffset + 8);
+        break;
+      }
+    }
+
+    if (fvarOffset == 0 || fvarOffset + 16 > data.lengthInBytes) {
+      return descriptors;
+    }
+
+    final int axesArrayOffset = data.getUint16(fvarOffset + 4);
+    final int axisCount = data.getUint16(fvarOffset + 8);
+    final int axisSize = data.getUint16(fvarOffset + 10);
+
+    final int axesStart = fvarOffset + axesArrayOffset;
+    if (axesStart + axisCount * axisSize > data.lengthInBytes) {
+      return descriptors;
+    }
+
+    var hasWght = false;
+    var hasItal = false;
+    var hasSlnt = false;
+    var hasWdth = false;
+
+    for (var i = 0; i < axisCount; i++) {
+      final int axisRecord = axesStart + i * axisSize;
+      final int axisTag = data.getUint32(axisRecord);
+      if (axisTag == 0x77676874) {
+        hasWght = true;
+      }
+      if (axisTag == 0x6974616C) {
+        hasItal = true;
+      }
+      if (axisTag == 0x736C6E74) {
+        hasSlnt = true;
+      }
+      if (axisTag == 0x77647468) {
+        hasWdth = true;
+      }
+    }
+
+    if (hasWght) {
+      descriptors['weight'] = '1 1000';
+    }
+    if (hasItal || hasSlnt) {
+      descriptors['style'] = 'oblique -90deg 90deg';
+    }
+    if (hasWdth) {
+      descriptors['stretch'] = '0% 2000%';
+    }
+
+    return descriptors;
   }
 
   @override
