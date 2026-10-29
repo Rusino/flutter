@@ -228,6 +228,11 @@ extension type SkSurface(JSObject _) implements JSObject {
   external double height();
   external void dispose();
   external SkImage makeImageSnapshot();
+  external SkImage? makeImageFromTexture(JSObject texture, SkImageInfo info);
+  external SkSurface? makeSurface(SkImageInfo info);
+
+  @JS('_resetContext')
+  external void resetContext();
 }
 
 extension type SkGrContext(JSObject _) implements JSObject {

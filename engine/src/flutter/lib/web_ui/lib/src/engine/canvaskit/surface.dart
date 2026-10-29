@@ -211,6 +211,9 @@ abstract class CkSurface extends Surface {
 
   @override
   Future<void> recreateContextForCanvas(DomEventTarget newCanvas) async {
+    if (identical(WebParagraphAtlas.instance.boundSurface, this)) {
+      WebParagraphAtlas.instance.reset();
+    }
     // The old Skia surface is now invalid and should be disposed.
     _skSurface?.dispose();
     _skSurface = null;
@@ -225,6 +228,9 @@ abstract class CkSurface extends Surface {
 
   @override
   void dispose() {
+    if (identical(WebParagraphAtlas.instance.boundSurface, this)) {
+      WebParagraphAtlas.instance.reset();
+    }
     _skSurface?.dispose();
     _skSurface = null;
   }
@@ -232,6 +238,45 @@ abstract class CkSurface extends Surface {
   @override
   void setSkiaResourceCacheMaxBytes(int bytes) {
     _grContext?.setResourceCacheLimitBytes(bytes.toDouble());
+  }
+
+  /// Renders [draw] into an offscreen render target of [width]x[height] on this surface's
+  /// [SkGrContext] without resizing the primary [canvas], falling back to [setSize] if
+  /// [SkSurface.makeSurface] is unavailable.
+  SkImage renderSnapshot(int width, int height, void Function(CkCanvas canvas) draw) {
+    final imageInfo = SkImageInfo(
+      alphaType: canvasKit.AlphaType.Premul,
+      colorType: canvasKit.ColorType.RGBA_8888,
+      colorSpace: SkColorSpaceSRGB,
+      width: width.toDouble(),
+      height: height.toDouble(),
+    );
+    SkSurface? scratchSurface;
+    if (_skSurface != null) {
+      try {
+        scratchSurface = _skSurface!.makeSurface(imageInfo);
+      } catch (_) {
+        scratchSurface = null;
+      }
+    }
+    final SkSurface targetSurface;
+    if (scratchSurface != null) {
+      targetSurface = scratchSurface;
+    } else {
+      setSize(BitmapSize(width, height));
+      targetSurface = _skSurface!;
+    }
+    try {
+      return WebParagraphAtlas.instance.withSurfaceFlush(this, () {
+        final ckCanvas = CkCanvas.fromSkCanvas(targetSurface.getCanvas());
+        ckCanvas.clear(const ui.Color(0x00000000));
+        draw(ckCanvas);
+        targetSurface.flush();
+        return targetSurface.makeImageSnapshot();
+      });
+    } finally {
+      scratchSurface?.dispose();
+    }
   }
 
   @override
@@ -269,15 +314,12 @@ abstract class CkSurface extends Surface {
       return bytes.buffer.asByteData();
     }
 
-    setSize(BitmapSize(engineImage.width, engineImage.height));
-    final SkSurface skSurface = _skSurface!;
-    final canvas = CkCanvas.fromSkCanvas(skSurface.getCanvas());
-
-    canvas.clear(const ui.Color(0x00000000));
     final paint = CkPaint();
-
-    canvas.drawImage(engineImage, ui.Offset.zero, paint);
-    final SkImage snapshot = skSurface.makeImageSnapshot();
+    final SkImage snapshot = renderSnapshot(
+      engineImage.width,
+      engineImage.height,
+      (CkCanvas canvas) => canvas.drawImage(engineImage, ui.Offset.zero, paint),
+    );
 
     try {
       if (format == ui.ImageByteFormat.rawRgba || format == ui.ImageByteFormat.rawStraightRgba) {
@@ -310,10 +352,12 @@ abstract class CkSurface extends Surface {
 
   /// Synchronously clears the surface, draws [picture] into it, and flushes.
   void _drawPicture(CkPicture picture) {
-    final canvas = CkCanvas.fromSkCanvas(_skSurface!.getCanvas());
-    canvas.clear(const ui.Color(0x00000000));
-    canvas.drawPicture(picture);
-    _skSurface!.flush();
+    WebParagraphAtlas.instance.withSurfaceFlush(this, () {
+      final canvas = CkCanvas.fromSkCanvas(_skSurface!.getCanvas());
+      canvas.clear(const ui.Color(0x00000000));
+      canvas.drawPicture(picture);
+      _skSurface!.flush();
+    });
   }
 
   @override
@@ -326,6 +370,12 @@ abstract class CkSurface extends Surface {
 /// The CanvasKit implementation of [OffscreenSurface].
 class CkOffscreenSurface extends CkSurface implements OffscreenSurface {
   CkOffscreenSurface(OffscreenCanvasProvider super.canvasProvider);
+
+  /// The WebGL context handle used by Skia on this surface, or -1 if uninitialized.
+  int get glContextHandle => _glContext;
+
+  /// The backing [DomOffscreenCanvas] for this offscreen surface.
+  DomOffscreenCanvas get offscreenCanvas => _canvas as DomOffscreenCanvas;
 
   @override
   int _getGlContext(SkWebGLContextOptions options) {

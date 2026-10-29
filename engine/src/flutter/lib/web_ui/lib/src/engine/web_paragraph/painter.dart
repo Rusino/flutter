@@ -19,6 +19,7 @@ final _paintContext =
     _paintCanvas.getContext('2d', {'willReadFrequently': true})! as DomCanvasRenderingContext2D;
 
 typedef ParagraphImageGenerator = Uint8List Function();
+typedef ParagraphCanvas2DPainter = void Function(DomCanvasRenderingContext2D context);
 
 /// Resizes the global paint canvas to the given width and height and updates the device pixel ratio.
 ///
@@ -294,23 +295,24 @@ abstract class WebParagraphPainter {
     // Draw background blocks directly on the output canvas
     _paintAllBlocks(StyleElements.background, canvas, offset, transform);
 
+    void paintToContext(DomCanvasRenderingContext2D context) {
+      // Translate Canvas2D context by canvas2dShift in logical units.
+      context.translate(canvas2dShift.dx, canvas2dShift.dy);
+      DomCanvasParagraphPainter._fillAllBlocks(context, StyleElements.shadows, layout);
+      DomCanvasParagraphPainter._fillAllBlocks(context, StyleElements.text, layout);
+      DomCanvasParagraphPainter._fillAllBlocks(context, StyleElements.decorations, layout);
+    }
+
     paintParagraphText(
       canvas,
       sourceRect,
       targetRect,
       effectiveScaleX: transform.effectiveScaleX,
       effectiveScaleY: transform.effectiveScaleY,
+      paintToCanvas2D: paintToContext,
       generateParagraphImage: () {
         _resizePaintCanvas(sourceRect, transform.effectiveScaleX, transform.effectiveScaleY);
-
-        // We translate Canvas2D context by canvas2dShift in logical units
-        _paintContext.translate(canvas2dShift.dx, canvas2dShift.dy);
-
-        // Fill out all the blocks on Canvas2D canvas
-        DomCanvasParagraphPainter._fillAllBlocks(StyleElements.shadows, layout);
-        DomCanvasParagraphPainter._fillAllBlocks(StyleElements.text, layout);
-        DomCanvasParagraphPainter._fillAllBlocks(StyleElements.decorations, layout);
-
+        paintToContext(_paintContext);
         final DomImageData imageData = _paintContext.getImageData(
           0,
           0,
@@ -330,18 +332,23 @@ abstract class WebParagraphPainter {
     ui.Rect sourceRect,
     ui.Rect targetRect, {
     required ParagraphImageGenerator generateParagraphImage,
+    ParagraphCanvas2DPainter? paintToCanvas2D,
     required double effectiveScaleX,
     required double effectiveScaleY,
   });
 }
 
-/// Paints a [WebParagraph] on a [DomHTMLCanvasElement].
+/// Paints a [WebParagraph] on a 2D canvas context.
 class DomCanvasParagraphPainter {
-  static void _fillAllBlocks(StyleElements styleElement, TextLayout layout) {
+  static void _fillAllBlocks(
+    DomCanvasRenderingContext2D context,
+    StyleElements styleElement,
+    TextLayout layout,
+  ) {
     // Paint the entire paragraph as a single image on Canvas2D
     for (final TextLine line in layout.lines) {
-      _paintContext.save();
-      _paintContext.translate(line.formattingShift, line.baseline);
+      context.save();
+      context.translate(line.formattingShift, line.baseline);
 
       for (final LineBlock block in line.visualBlocks) {
         if (block is PlaceholderBlock) {
@@ -349,69 +356,86 @@ class DomCanvasParagraphPainter {
           continue;
         }
 
-        _paintContext.save();
+        context.save();
         switch (styleElement) {
           case StyleElements.shadows:
             // For text and shadows we need to shift to the start of the span
-            _paintContext.translate(block.spanShiftFromLineStart, 0);
-            _fillBlockShadows(layout, block as TextBlock);
+            context.translate(block.spanShiftFromLineStart, 0);
+            _fillBlockShadows(context, layout, block as TextBlock);
           case StyleElements.text:
             // For text and shadows we need to shift to the start of the span
-            _paintContext.translate(block.spanShiftFromLineStart, 0);
-            _fillBlockText(layout, block as TextBlock);
+            context.translate(block.spanShiftFromLineStart, 0);
+            _fillBlockText(context, layout, block as TextBlock);
           case StyleElements.decorations:
             // For decorations we need to shift to the start of the block
-            _paintContext.translate(block.shiftFromLineStart, -line.fontBoundingBoxAscent);
+            context.translate(block.shiftFromLineStart, -line.fontBoundingBoxAscent);
             // Let's calculate the sizes
-            final (ui.Rect sourceRect, ui.Rect targetRect) = _calculateBlock(
+            final (ui.Rect sourceRect, ui.Rect _) = _calculateBlock(
               block as TextBlock,
               ui.Offset(line.advance.left + line.formattingShift, line.advance.top),
             );
             // TODO(jlavrova): Implement decorations entirely on ui.Canvas
-            DomCanvasDecorationPainter.fillDecorations(_paintContext, block, sourceRect);
+            DomCanvasDecorationPainter.fillDecorations(context, block, sourceRect);
           case StyleElements.background:
             throw Exception(
               'Background is drawn directly on the output canvas, not on the canvas2D',
             );
         }
-        _paintContext.restore();
+        context.restore();
       }
 
-      _paintContext.restore();
+      context.restore();
     }
   }
 
-  static void _fillBlockText(TextLayout layout, TextBlock block) {
+  static void _fillBlockText(
+    DomCanvasRenderingContext2D context,
+    TextLayout layout,
+    TextBlock block,
+  ) {
     for (final (WebCluster clusterText, bool isLtr) in block.getTextClustersInVisualOrder(layout)) {
-      _fillTextCluster(clusterText, isLtr);
+      _fillTextCluster(context, clusterText, isLtr);
     }
   }
 
-  static void _fillBlockShadows(TextLayout layout, TextBlock block) {
+  static void _fillBlockShadows(
+    DomCanvasRenderingContext2D context,
+    TextLayout layout,
+    TextBlock block,
+  ) {
     if (!block.style.hasElement(StyleElements.shadows) || block.style.shadows == null) {
       return;
     }
 
     for (final (WebCluster clusterText, bool isLtr) in block.getTextClustersInVisualOrder(layout)) {
       for (final ui.Shadow shadow in clusterText.style.shadows!) {
-        _fillShadowCluster(clusterText, shadow, isLtr);
+        _fillShadowCluster(context, clusterText, shadow, isLtr);
       }
     }
   }
 
-  static void _fillTextCluster(WebCluster webTextCluster, bool isDefaultLtr) {
+  static void _fillTextCluster(
+    DomCanvasRenderingContext2D context,
+    WebCluster webTextCluster,
+    bool isDefaultLtr,
+  ) {
     final WebTextStyle style = webTextCluster.style;
-    _paintContext.fillStyle = style.getForegroundColor().toCssString();
-    webTextCluster.addToContext(_paintContext, 0, 0);
+    context.fillStyle = style.getForegroundColor().toCssString();
+    webTextCluster.addToContext(context, 0, 0);
   }
 
-  static void _fillShadowCluster(WebCluster webTextCluster, ui.Shadow shadow, bool isDefaultLtr) {
+  static void _fillShadowCluster(
+    DomCanvasRenderingContext2D context,
+    WebCluster webTextCluster,
+    ui.Shadow shadow,
+    bool isDefaultLtr,
+  ) {
     // It's not clear how to draw the shadow directly on ui.Canvas without going through canvas2d.
-    _paintContext.shadowColor = shadow.color.toCssString();
-    _paintContext.shadowBlur = shadow.blurRadius;
-    _paintContext.shadowOffsetX = shadow.offset.dx;
-    _paintContext.shadowOffsetY = shadow.offset.dy;
+    context.shadowColor = shadow.color.toCssString();
+    context.shadowBlur = shadow.blurRadius;
+    context.shadowOffsetX = shadow.offset.dx;
+    context.shadowOffsetY = shadow.offset.dy;
 
-    webTextCluster.addToContext(_paintContext, 0, 0);
+    webTextCluster.addToContext(context, 0, 0);
   }
 }

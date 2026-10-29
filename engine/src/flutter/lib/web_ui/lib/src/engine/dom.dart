@@ -1007,6 +1007,19 @@ DomHTMLCanvasElement createDomCanvasElement({int? width, int? height}) {
 
 @JS('WebGLRenderingContext')
 extension type WebGLContext._(JSObject _) implements JSObject {
+  static const int texture2D = 0x0DE1;
+  static const int rgba = 0x1908;
+  static const int unsignedByte = 0x1401;
+  static const int textureMagFilter = 0x2800;
+  static const int textureMinFilter = 0x2801;
+  static const int textureWrapS = 0x2802;
+  static const int textureWrapT = 0x2803;
+  static const int linear = 0x2601;
+  static const int clampToEdge = 0x812F;
+  static const int unpackSkipRows = 0x0CF3;
+  static const int unpackSkipPixels = 0x0CF4;
+  static const int unpackPremultiplyAlphaWebgl = 0x9241;
+
   external int getParameter(int value);
 
   @JS('SAMPLES')
@@ -1022,6 +1035,55 @@ extension type WebGLContext._(JSObject _) implements JSObject {
   }
 
   external bool isContextLost();
+
+  external JSObject? createTexture();
+  external void deleteTexture(JSObject? texture);
+  external void bindTexture(int target, JSObject? texture);
+  external void texParameteri(int target, int pname, int param);
+  external void pixelStorei(int pname, int param);
+
+  @JS('texImage2D')
+  external void texImage2DEmpty(
+    int target,
+    int level,
+    int internalformat,
+    int width,
+    int height,
+    int border,
+    int format,
+    int type,
+    JSAny? pixels,
+  );
+
+  @JS('texSubImage2D')
+  external void texSubImage2DCanvasWebGL2(
+    int target,
+    int level,
+    int xoffset,
+    int yoffset,
+    int width,
+    int height,
+    int format,
+    int type,
+    DomCanvasImageSource source,
+  );
+
+  @JS('texSubImage2D')
+  external void texSubImage2DCanvasWebGL1(
+    int target,
+    int level,
+    int xoffset,
+    int yoffset,
+    int format,
+    int type,
+    DomCanvasImageSource source,
+  );
+
+  bool get supportsSharedImageAtlas => has('attachCanvasSharedImageUnsafe');
+
+  external JSObject? attachCanvasSharedImageUnsafe(DomOffscreenCanvas canvas);
+  external bool beginCanvasSharedImageReadUnsafe(JSObject texture);
+  external void endCanvasSharedImageReadUnsafe(JSObject texture);
 }
 
 extension type WebGLLoseContextExtension._(JSObject _) implements JSObject {
@@ -2175,6 +2237,8 @@ extension type DomOffscreenCanvas._(JSObject _) implements DomEventTarget, DomCa
       return _getContext(contextType, attributes.toJSAnyDeep);
     }
   }
+
+  DomCanvasRenderingContext2D get context2D => getContext('2d')! as DomCanvasRenderingContext2D;
 
   WebGLContext getGlContext(int majorVersion) {
     if (majorVersion == 1) {

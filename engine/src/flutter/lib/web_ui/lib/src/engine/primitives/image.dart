@@ -20,21 +20,31 @@ class EngineImage implements ui.Image, StackTraceDebugger {
   ///
   /// Increments the reference count of the optional [imageSource] to prevent it
   /// from being eagerly closed.
-  EngineImage(BackendImage backendImage, this.width, this.height, {this.imageSource}) {
+  EngineImage(
+    BackendImage backendImage,
+    this.width,
+    this.height, {
+    this.imageSource,
+    bool notifyInstrumentation = true,
+  }) {
     // Wrap the backend image in a reference-counted box.
     box = CountedRef<EngineImage, BackendImage>(
       backendImage,
       this,
       'BackendImage',
       onDispose: (BackendImage backendImage) => backendImage.dispose(),
-      onDisposed: (EngineImage image) {
-        ui.Image.onDispose?.call(image);
-      },
+      onDisposed: notifyInstrumentation
+          ? (EngineImage image) {
+              ui.Image.onDispose?.call(image);
+            }
+          : null,
     );
     // Initialize the debug stack trace.
     _init();
-    // Notify the creation listeners.
-    ui.Image.onCreate?.call(this);
+    if (notifyInstrumentation) {
+      // Notify the creation listeners.
+      ui.Image.onCreate?.call(this);
+    }
     // Retain a reference to the image source.
     imageSource?.retain();
   }
@@ -146,6 +156,7 @@ class EngineImage implements ui.Image, StackTraceDebugger {
       final ImageSource? source = cloneImage.imageSource;
       final bool isSourceDetached =
           source == null ||
+          source is AtlasPageImageSource ||
           (source is ImageBitmapImageSource && source.imageBitmap.width == 0) ||
           (source is VideoFrameImageSource && source.videoFrame.displayWidth == 0);
 
@@ -189,6 +200,7 @@ class EngineImage implements ui.Image, StackTraceDebugger {
           }
         case final CanvasImageSourceWrapper s:
           return await readPixelsFromDomImageSource(s.canvasImageSource, format, s.width, s.height);
+        case AtlasPageImageSource():
         case null:
           break;
       }

@@ -374,6 +374,42 @@ class CanvasImageSourceWrapper extends ImageSource {
   }
 }
 
+/// An [ImageSource] implementation tracking [PictureImageTracker] references to a
+/// shared [WebParagraphAtlas] page so evicted pages stay alive until all referencing
+/// [ui.Picture]s are disposed.
+class AtlasPageImageSource extends ImageSource {
+  AtlasPageImageSource(
+    this.canvasImageSource,
+    this.width,
+    this.height, {
+    required this.onLastPictureReleased,
+  });
+
+  @override
+  final DomCanvasImageSource canvasImageSource;
+
+  @override
+  final int width;
+
+  @override
+  final int height;
+
+  /// Invoked when the last [PictureImageTracker] releases this source and only the
+  /// owning [AtlasPage.engineImage] reference (`refCount == 1`) remains.
+  final void Function() onLastPictureReleased;
+
+  @override
+  void release() {
+    super.release();
+    if (refCount == 1) {
+      onLastPictureReleased();
+    }
+  }
+
+  @override
+  void _doClose() {}
+}
+
 /// Tracks and retains [ImageSource] instances drawn onto a [ui.Canvas] during
 /// picture recording.
 ///

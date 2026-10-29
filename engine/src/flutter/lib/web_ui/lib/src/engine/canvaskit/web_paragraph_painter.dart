@@ -11,9 +11,11 @@ import '../primitives/image.dart';
 import '../web_paragraph/painter.dart';
 import 'canvaskit_api.dart';
 import 'image.dart';
+import 'surface.dart';
+import 'web_paragraph_atlas.dart';
 
-/// Represents a cached rasterized paragraph image along with the effective scale
-/// (combining device pixel ratio and canvas matrix scale) it was rendered at.
+/// Represents a standalone cached rasterized paragraph image used when the shared GPU
+/// atlas is unavailable (software mode, multi-surface rasterizer, or oversized paragraphs).
 class _ParagraphCacheEntry {
   _ParagraphCacheEntry({
     required this.image,
@@ -21,36 +23,50 @@ class _ParagraphCacheEntry {
     required this.effectiveScaleY,
   });
 
-  static const double _scaleEpsilon = 0.001;
-
   final EngineImage image;
   final double effectiveScaleX;
   final double effectiveScaleY;
 
-  /// Checks if the cached image scale matches the requested effective scales within [_scaleEpsilon].
+  /// Checks if the cached image scale matches the requested effective scales.
   bool matchesScale({required double effectiveScaleX, required double effectiveScaleY}) {
-    return (this.effectiveScaleX - effectiveScaleX).abs() < _scaleEpsilon &&
-        (this.effectiveScaleY - effectiveScaleY).abs() < _scaleEpsilon;
+    return AtlasParagraphSlot.matchesAtlasScale(
+      this.effectiveScaleX,
+      this.effectiveScaleY,
+      effectiveScaleX,
+      effectiveScaleY,
+    );
   }
 }
 
 class CanvasKitPainter extends WebParagraphPainter {
   CanvasKitPainter(super.paragraph);
 
-  _ParagraphCacheEntry? _cacheEntry;
+  AtlasParagraphSlot? _atlasSlot;
+  _ParagraphCacheEntry? _standaloneEntry;
 
-  /// For a specific paragraph, how many times it was rasterized in the current test
+  /// For a specific paragraph, how many times it was rasterized in the current test.
   @override
   @visibleForTesting
   int debugRasterizeCount = 0;
 
+  /// Exposes the currently cached shared-atlas slot for unit testing.
+  @visibleForTesting
+  AtlasParagraphSlot? get debugAtlasSlot => _atlasSlot;
+
   @override
-  bool get hasCache => _cacheEntry != null;
+  bool get hasCache {
+    final AtlasParagraphSlot? slot = _atlasSlot;
+    if (slot != null && slot.isValidOnSurface(WebParagraphAtlas.instance.resolveTargetSurface())) {
+      return true;
+    }
+    return _standaloneEntry != null;
+  }
 
   @override
   void clearCache() {
-    _cacheEntry?.image.dispose();
-    _cacheEntry = null;
+    _atlasSlot = null;
+    _standaloneEntry?.image.dispose();
+    _standaloneEntry = null;
   }
 
   @override
@@ -59,19 +75,77 @@ class CanvasKitPainter extends WebParagraphPainter {
     ui.Rect sourceRect,
     ui.Rect targetRect, {
     required ParagraphImageGenerator generateParagraphImage,
+    ParagraphCanvas2DPainter? paintToCanvas2D,
     required double effectiveScaleX,
     required double effectiveScaleY,
   }) {
-    final _ParagraphCacheEntry? cacheEntry = _cacheEntry;
-    if (cacheEntry != null &&
-        !cacheEntry.matchesScale(
+    final int physicalWidth = sourceRect.width.ceil();
+    final int physicalHeight = sourceRect.height.ceil();
+    final CkOffscreenSurface? atlasSurface = paintToCanvas2D == null
+        ? null
+        : WebParagraphAtlas.instance.resolveTargetSurface();
+
+    if (atlasSurface != null &&
+        physicalWidth <= WebParagraphAtlas.maxSlotDimension &&
+        physicalHeight <= WebParagraphAtlas.maxSlotDimension) {
+      if (_standaloneEntry != null) {
+        _standaloneEntry!.image.dispose();
+        _standaloneEntry = null;
+      }
+
+      AtlasParagraphSlot? slot = _atlasSlot;
+      if (slot != null &&
+          !slot.isValidFor(
+            surface: atlasSurface,
+            effectiveScaleX: effectiveScaleX,
+            effectiveScaleY: effectiveScaleY,
+          )) {
+        slot = null;
+        _atlasSlot = null;
+      }
+
+      if (slot == null) {
+        slot = WebParagraphAtlas.instance.rasterizeIntoSlot(
+          surface: atlasSurface,
+          width: physicalWidth,
+          height: physicalHeight,
+          effectiveScaleX: effectiveScaleX,
+          effectiveScaleY: effectiveScaleY,
+          paintToCanvas2D: paintToCanvas2D!,
+        );
+        if (slot != null) {
+          assert(() {
+            debugRasterizeCount++;
+            return true;
+          }());
+          _atlasSlot = slot;
+        }
+      } else {
+        WebParagraphAtlas.instance.markSlotUsed(slot);
+      }
+
+      if (slot != null) {
+        canvas.drawImageRect(
+          slot.page.engineImage,
+          slot.sourceRect,
+          targetRect,
+          ui.Paint()..filterQuality = ui.FilterQuality.none,
+        );
+        return;
+      }
+    }
+
+    _atlasSlot = null;
+    final _ParagraphCacheEntry? standaloneEntry = _standaloneEntry;
+    if (standaloneEntry != null &&
+        !standaloneEntry.matchesScale(
           effectiveScaleX: effectiveScaleX,
           effectiveScaleY: effectiveScaleY,
         )) {
       clearCache();
     }
 
-    if (!hasCache) {
+    if (_standaloneEntry == null) {
       assert(() {
         debugRasterizeCount++;
         return true;
@@ -93,7 +167,7 @@ class CanvasKitPainter extends WebParagraphPainter {
       if (skImage == null) {
         throw Exception('Failed to convert text image bitmap to an SkImage.');
       }
-      _cacheEntry = _ParagraphCacheEntry(
+      _standaloneEntry = _ParagraphCacheEntry(
         image: EngineImage(
           CkImageDelegate(skImage),
           skImage.width().toInt(),
@@ -105,7 +179,7 @@ class CanvasKitPainter extends WebParagraphPainter {
     }
 
     canvas.drawImageRect(
-      _cacheEntry!.image,
+      _standaloneEntry!.image,
       sourceRect,
       targetRect,
       ui.Paint()..filterQuality = ui.FilterQuality.none,

@@ -50,7 +50,9 @@ class OffscreenCanvasRasterizer extends Rasterizer {
 
   @override
   Surface createPictureToImageSurface() {
-    return _surfaceProvider.createSurface();
+    // Share the offscreen GL context with scene rasterization so GPU-backed
+    // atlas textures remain valid across both Picture.toImageSync and frame draws.
+    return offscreenSurface;
   }
 }
 

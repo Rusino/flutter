@@ -47,8 +47,22 @@ class CanvasKitRenderer extends Renderer {
 
   @override
   void debugResetRasterizer() {
+    WebParagraphAtlas.instance.reset();
     rasterizer = _createRasterizer();
     _pictureToImageSurface = rasterizer.createPictureToImageSurface() as CkSurface;
+  }
+
+  @override
+  void debugOverrideRasterizer(Rasterizer testRasterizer) {
+    WebParagraphAtlas.instance.reset();
+    rasterizer = testRasterizer;
+    _pictureToImageSurface = rasterizer.createPictureToImageSurface() as CkSurface;
+  }
+
+  @override
+  void dispose() {
+    WebParagraphAtlas.instance.reset();
+    super.dispose();
   }
 
   @override

@@ -9,7 +9,6 @@ import 'package:ui/ui.dart' as ui;
 import '../layer/layer_painting.dart';
 import '../primitives/image.dart';
 import '../primitives/image_source.dart';
-import '../util.dart';
 import 'canvas.dart';
 import 'canvaskit_api.dart';
 import 'image.dart';
@@ -132,13 +131,11 @@ class CkPicture implements LayerPicture, StackTraceDebugger {
     assert(debugCheckNotDisposed('Cannot convert picture to image.'));
 
     final CkSurface surface = CanvasKitRenderer.instance.pictureToImageSurface;
-    surface.setSize(BitmapSize(width, height));
-    final SkSurface skiaSurface = surface.skSurface!;
-
-    final ckCanvas = CkCanvas.fromSkCanvas(skiaSurface.getCanvas());
-    ckCanvas.clear(const ui.Color(0x00000000));
-    ckCanvas.drawPicture(this);
-    final SkImage skImage = skiaSurface.makeImageSnapshot();
+    final SkImage skImage = surface.renderSnapshot(
+      width,
+      height,
+      (CkCanvas ckCanvas) => ckCanvas.drawPicture(this),
+    );
 
     // TODO(hterkelsen): This is a hack to get the pixels from the SkImage.
     // We should be able to do this without creating a new image. This is

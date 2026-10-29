@@ -47,6 +47,7 @@ export 'engine/canvaskit/surface.dart';
 export 'engine/canvaskit/text.dart';
 export 'engine/canvaskit/util.dart';
 export 'engine/canvaskit/vertices.dart';
+export 'engine/canvaskit/web_paragraph_atlas.dart';
 export 'engine/canvaskit/web_paragraph_painter.dart';
 export 'engine/clipboard.dart';
 export 'engine/compositing/canvas_provider.dart';
